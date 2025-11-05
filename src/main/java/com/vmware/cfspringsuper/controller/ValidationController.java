@@ -22,7 +22,7 @@ public class ValidationController {
     private final RedisValidationService redisService;
     private final RabbitMQValidationService rabbitMQService;
 
-    @Autowired
+    @Autowired(required = false)
     public ValidationController(
             @Nullable MysqlValidationService mysqlService,
             @Nullable PostgresqlValidationService postgresqlService,

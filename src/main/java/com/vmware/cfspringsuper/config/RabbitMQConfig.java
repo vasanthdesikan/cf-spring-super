@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.lang.Nullable;
 
 import java.net.URI;
 import java.util.List;
@@ -75,7 +76,11 @@ public class RabbitMQConfig {
 
     @Bean
     @ConditionalOnBean(ConnectionFactory.class)
-    public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory) {
+    public RabbitTemplate rabbitTemplate(@Autowired(required = false) @Nullable ConnectionFactory connectionFactory) {
+        if (connectionFactory == null) {
+            log.warn("ConnectionFactory is null - RabbitTemplate will not be created");
+            return null;
+        }
         RabbitTemplate template = new RabbitTemplate(connectionFactory);
         template.setMessageConverter(new Jackson2JsonMessageConverter());
         return template;

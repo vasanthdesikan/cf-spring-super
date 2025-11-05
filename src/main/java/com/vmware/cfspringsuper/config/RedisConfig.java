@@ -10,6 +10,7 @@ import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+import org.springframework.lang.Nullable;
 
 import java.util.List;
 import java.util.Map;
@@ -73,7 +74,11 @@ public class RedisConfig {
 
     @Bean
     @ConditionalOnBean(RedisConnectionFactory.class)
-    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
+    public RedisTemplate<String, Object> redisTemplate(@Autowired(required = false) @Nullable RedisConnectionFactory connectionFactory) {
+        if (connectionFactory == null) {
+            log.warn("RedisConnectionFactory is null - RedisTemplate will not be created");
+            return null;
+        }
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
         template.setKeySerializer(new StringRedisSerializer());
