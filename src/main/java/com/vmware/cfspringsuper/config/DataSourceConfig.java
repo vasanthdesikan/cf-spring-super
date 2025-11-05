@@ -36,8 +36,14 @@ public class DataSourceConfig {
         VcapServicesConfig.ServiceCredentials creds = mysqlServices.get(0);
         log.info("Configuring MySQL datasource for service: {}", creds.getServiceName());
 
+        // Prefer jdbcUrl if available, otherwise build from components
+        String jdbcUrl = creds.getJdbcUrl();
+        if (jdbcUrl == null || jdbcUrl.isEmpty()) {
+            jdbcUrl = buildJdbcUrl("mysql", creds);
+        }
+
         return DataSourceBuilder.create()
-                .url(buildJdbcUrl("mysql", creds))
+                .url(jdbcUrl)
                 .username(creds.getUsername())
                 .password(creds.getPassword())
                 .driverClassName("com.mysql.cj.jdbc.Driver")
@@ -56,8 +62,14 @@ public class DataSourceConfig {
         VcapServicesConfig.ServiceCredentials creds = postgresServices.get(0);
         log.info("Configuring PostgreSQL datasource for service: {}", creds.getServiceName());
 
+        // Prefer jdbcUrl if available, otherwise build from components
+        String jdbcUrl = creds.getJdbcUrl();
+        if (jdbcUrl == null || jdbcUrl.isEmpty()) {
+            jdbcUrl = buildJdbcUrl("postgresql", creds);
+        }
+
         return DataSourceBuilder.create()
-                .url(buildJdbcUrl("postgresql", creds))
+                .url(jdbcUrl)
                 .username(creds.getUsername())
                 .password(creds.getPassword())
                 .driverClassName("org.postgresql.Driver")
@@ -65,13 +77,26 @@ public class DataSourceConfig {
     }
 
     private String buildJdbcUrl(String dbType, VcapServicesConfig.ServiceCredentials creds) {
+        // Try URI first (but convert to JDBC format if needed)
         if (creds.getUri() != null && !creds.getUri().isEmpty()) {
-            return creds.getUri();
+            String uri = creds.getUri();
+            // Convert mysql:// or postgresql:// URI to jdbc: format
+            if (uri.startsWith("mysql://")) {
+                return "jdbc:" + uri;
+            } else if (uri.startsWith("postgresql://")) {
+                return "jdbc:" + uri;
+            }
+            return uri;
         }
 
         String host = creds.getHost();
+        if (host == null || host.isEmpty()) {
+            log.error("Cannot build JDBC URL: host is missing");
+            return null;
+        }
+
         Integer port = creds.getPort() != null ? creds.getPort() : (dbType.equals("mysql") ? 3306 : 5432);
-        String database = creds.getDatabase();
+        String database = creds.getDatabase() != null ? creds.getDatabase() : "";
 
         if (dbType.equals("mysql")) {
             return String.format("jdbc:mysql://%s:%d/%s?useSSL=true&requireSSL=false", host, port, database);

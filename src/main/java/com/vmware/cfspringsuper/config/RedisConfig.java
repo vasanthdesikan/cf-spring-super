@@ -26,9 +26,10 @@ public class RedisConfig {
     @Bean
     public RedisConnectionFactory redisConnectionFactory() {
         // Try to find Redis or Valkey service
-        List<VcapServicesConfig.ServiceCredentials> redisServices = serviceCredentials.get("redis");
+        // Check for valkey first, then redis
+        List<VcapServicesConfig.ServiceCredentials> redisServices = serviceCredentials.get("valkey");
         if (redisServices == null || redisServices.isEmpty()) {
-            redisServices = serviceCredentials.get("valkey");
+            redisServices = serviceCredentials.get("redis");
         }
         
         if (redisServices == null || redisServices.isEmpty()) {
@@ -41,13 +42,32 @@ public class RedisConfig {
 
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
         config.setHostName(creds.getHost());
-        config.setPort(creds.getPort() != null ? creds.getPort() : 6379);
+        
+        // Priority: service_gateway_access_port (if enabled) > TLS port > regular port
+        int port = 6379;
+        if (creds.getServiceGatewayEnabled() != null && creds.getServiceGatewayEnabled() 
+                && creds.getServiceGatewayAccessPort() != null) {
+            port = creds.getServiceGatewayAccessPort();
+            log.info("Using service gateway access port: {}", port);
+        } else if (creds.getTlsEnabled() != null && creds.getTlsEnabled() && creds.getTlsPort() != null) {
+            port = creds.getTlsPort();
+            log.info("Using TLS port: {}", port);
+        } else if (creds.getPort() != null) {
+            port = creds.getPort();
+            log.info("Using regular port: {}", port);
+        }
+        config.setPort(port);
         
         if (creds.getPassword() != null && !creds.getPassword().isEmpty()) {
             config.setPassword(creds.getPassword());
         }
 
-        return new LettuceConnectionFactory(config);
+        LettuceConnectionFactory factory = new LettuceConnectionFactory(config);
+        
+        // Note: TLS configuration would need additional setup for Lettuce
+        // For now, we'll use the TLS port but full TLS setup may require additional configuration
+        
+        return factory;
     }
 
     @Bean

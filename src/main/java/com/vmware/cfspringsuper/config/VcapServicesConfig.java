@@ -37,16 +37,18 @@ public class VcapServicesConfig {
 
             while (fields.hasNext()) {
                 Map.Entry<String, JsonNode> entry = fields.next();
-                String serviceName = entry.getKey();
+                String serviceKey = entry.getKey(); // e.g., "user-provided", "mysql", "postgresql", etc.
                 JsonNode services = entry.getValue();
 
                 if (services.isArray()) {
-                    List<ServiceCredentials> credsList = new ArrayList<>();
                     for (JsonNode service : services) {
                         ServiceCredentials creds = parseServiceCredentials(service);
+                        
+                        // Determine service type based on name, label, or service key
+                        String serviceType = determineServiceType(service, serviceKey, creds);
+                        List<ServiceCredentials> credsList = credentialsMap.computeIfAbsent(serviceType, k -> new ArrayList<>());
                         credsList.add(creds);
                     }
-                    credentialsMap.put(serviceName, credsList);
                 }
             }
         } catch (Exception e) {
@@ -56,35 +58,121 @@ public class VcapServicesConfig {
         return credentialsMap;
     }
 
+    private String determineServiceType(JsonNode service, String serviceKey, ServiceCredentials creds) {
+        // Check service name first
+        if (service.has("name")) {
+            String name = service.get("name").asText().toLowerCase();
+            if (name.contains("mysql")) return "mysql";
+            if (name.contains("postgres")) return "postgresql";
+            if (name.contains("valkey") || name.contains("redis")) return "valkey";
+            if (name.contains("rabbit")) return "rabbitmq";
+        }
+        
+        // Check label
+        if (service.has("label")) {
+            String label = service.get("label").asText().toLowerCase();
+            if (label.contains("mysql")) return "mysql";
+            if (label.contains("postgres")) return "postgresql";
+            if (label.contains("valkey") || label.contains("redis")) return "valkey";
+            if (label.contains("rabbit")) return "rabbitmq";
+        }
+        
+        // Check service key (for standard services)
+        String keyLower = serviceKey.toLowerCase();
+        if (keyLower.contains("mysql")) return "mysql";
+        if (keyLower.contains("postgres")) return "postgresql";
+        if (keyLower.contains("valkey") || keyLower.contains("redis")) return "valkey";
+        if (keyLower.contains("rabbit")) return "rabbitmq";
+        
+        // For user-provided services, check credentials structure
+        if ("user-provided".equals(serviceKey)) {
+            // Check if it has jdbcUrl (database)
+            if (creds.getJdbcUrl() != null) {
+                if (creds.getJdbcUrl().contains("mysql")) return "mysql";
+                if (creds.getJdbcUrl().contains("postgresql")) return "postgresql";
+            }
+            // Check if it has host/port but no database (could be redis/valkey)
+            if (creds.getHost() != null && creds.getPort() != null && creds.getDatabase() == null) {
+                return "valkey";
+            }
+        }
+        
+        return serviceKey; // Fallback to original key
+    }
+
     private ServiceCredentials parseServiceCredentials(JsonNode service) {
         ServiceCredentials creds = new ServiceCredentials();
         
-        // Handle standard service bindings
+        // Extract service metadata
+        if (service.has("name")) {
+            creds.setServiceName(service.get("name").asText());
+        }
+        if (service.has("label")) {
+            creds.setLabel(service.get("label").asText());
+        }
+        
+        // Handle credentials - can be nested (credentials.credentials) for user-provided services
+        JsonNode credentials = null;
         if (service.has("credentials")) {
-            JsonNode credentials = service.get("credentials");
-            creds.setHost(extractString(credentials, "host", "hostname"));
+            JsonNode credsNode = service.get("credentials");
+            // Check if credentials are nested (user-provided services)
+            if (credsNode.has("credentials")) {
+                credentials = credsNode.get("credentials");
+            } else {
+                credentials = credsNode;
+            }
+        }
+        
+        if (credentials != null) {
+            // Extract host (try multiple field names)
+            String host = extractString(credentials, "host", "hostname");
+            if (host == null && credentials.has("hosts") && credentials.get("hosts").isArray()) {
+                // PostgreSQL uses hosts array - take first element
+                JsonNode hostsArray = credentials.get("hosts");
+                if (hostsArray.size() > 0) {
+                    host = hostsArray.get(0).asText();
+                }
+            }
+            creds.setHost(host);
+            
+            // Extract port
             creds.setPort(extractInt(credentials, "port"));
-            creds.setDatabase(extractString(credentials, "database", "name"));
+            
+            // Extract database name (try multiple field names)
+            creds.setDatabase(extractString(credentials, "database", "db", "name"));
+            
+            // Extract username (try multiple field names)
             creds.setUsername(extractString(credentials, "username", "user"));
+            
+            // Extract password
             creds.setPassword(extractString(credentials, "password"));
+            
+            // Extract JDBC URL (preferred for databases)
+            creds.setJdbcUrl(extractString(credentials, "jdbcUrl", "jdbc_url"));
+            
+            // Extract URI
             creds.setUri(extractString(credentials, "uri"));
             
             // For RabbitMQ
             creds.setVirtualHost(extractString(credentials, "vhost", "virtual_host"));
             creds.setManagementUri(extractString(credentials, "management_uri"));
             
-            // For Redis/Valkey
+            // For Redis/Valkey - check TLS
             if (credentials.has("tls")) {
                 creds.setTlsEnabled(credentials.get("tls").asBoolean(false));
+            } else if (credentials.has("tls_port")) {
+                // If tls_port exists, TLS is available
+                creds.setTlsEnabled(true);
+                creds.setTlsPort(extractInt(credentials, "tls_port"));
             }
-        }
-        
-        // Handle User Provided Services (CUPS) - credentials are in the same structure
-        if (service.has("name")) {
-            creds.setServiceName(service.get("name").asText());
-        }
-        if (service.has("label")) {
-            creds.setLabel(service.get("label").asText());
+            
+            // For Redis/Valkey - service gateway support
+            if (credentials.has("service_gateway_enabled")) {
+                creds.setServiceGatewayEnabled(credentials.get("service_gateway_enabled").asBoolean(false));
+            }
+            if (credentials.has("service_gateway_access_port")) {
+                creds.setServiceGatewayAccessPort(extractInt(credentials, "service_gateway_access_port"));
+            }
         }
         
         return creds;
@@ -115,9 +203,13 @@ public class VcapServicesConfig {
         private String username;
         private String password;
         private String uri;
+        private String jdbcUrl;
         private String virtualHost;
         private String managementUri;
         private Boolean tlsEnabled = false;
+        private Integer tlsPort;
+        private Boolean serviceGatewayEnabled = false;
+        private Integer serviceGatewayAccessPort;
 
         // Getters and Setters
         public String getServiceName() { return serviceName; }
@@ -144,6 +236,9 @@ public class VcapServicesConfig {
         public String getUri() { return uri; }
         public void setUri(String uri) { this.uri = uri; }
 
+        public String getJdbcUrl() { return jdbcUrl; }
+        public void setJdbcUrl(String jdbcUrl) { this.jdbcUrl = jdbcUrl; }
+
         public String getVirtualHost() { return virtualHost; }
         public void setVirtualHost(String virtualHost) { this.virtualHost = virtualHost; }
 
@@ -152,6 +247,15 @@ public class VcapServicesConfig {
 
         public Boolean getTlsEnabled() { return tlsEnabled; }
         public void setTlsEnabled(Boolean tlsEnabled) { this.tlsEnabled = tlsEnabled; }
+
+        public Integer getTlsPort() { return tlsPort; }
+        public void setTlsPort(Integer tlsPort) { this.tlsPort = tlsPort; }
+
+        public Boolean getServiceGatewayEnabled() { return serviceGatewayEnabled; }
+        public void setServiceGatewayEnabled(Boolean serviceGatewayEnabled) { this.serviceGatewayEnabled = serviceGatewayEnabled; }
+
+        public Integer getServiceGatewayAccessPort() { return serviceGatewayAccessPort; }
+        public void setServiceGatewayAccessPort(Integer serviceGatewayAccessPort) { this.serviceGatewayAccessPort = serviceGatewayAccessPort; }
     }
 }
 
