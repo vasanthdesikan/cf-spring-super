@@ -14,6 +14,7 @@ import java.util.Map;
 /**
  * Configuration for data sources (MySQL and PostgreSQL)
  * Handles multiple service instances and selects the first available
+ * Creates beans only when services are available
  */
 @Slf4j
 @Configuration
@@ -28,7 +29,7 @@ public class DataSourceConfig {
         List<VcapServicesConfig.ServiceCredentials> mysqlServices = serviceCredentials.get("mysql");
         
         if (mysqlServices == null || mysqlServices.isEmpty()) {
-            log.warn("No MySQL service found in VCAP_SERVICES");
+            log.warn("No MySQL service found in VCAP_SERVICES - MySQL datasource will not be created");
             return null;
         }
 
@@ -48,7 +49,7 @@ public class DataSourceConfig {
         List<VcapServicesConfig.ServiceCredentials> postgresServices = serviceCredentials.get("postgresql");
         
         if (postgresServices == null || postgresServices.isEmpty()) {
-            log.warn("No PostgreSQL service found in VCAP_SERVICES");
+            log.warn("No PostgreSQL service found in VCAP_SERVICES - PostgreSQL datasource will not be created");
             return null;
         }
 

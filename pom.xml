@@ -74,14 +74,7 @@
             <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
 
-        <!-- Cloud Foundry Connector -->
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-connectors-core</artifactId>
-            <version>3.0.0</version>
-        </dependency>
-
-        <!-- Jackson for JSON processing -->
+        <!-- Jackson for JSON processing (VCAP_SERVICES parsing) -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>

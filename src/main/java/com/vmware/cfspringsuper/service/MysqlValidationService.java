@@ -1,6 +1,7 @@
 package com.vmware.cfspringsuper.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
@@ -22,6 +23,7 @@ public class MysqlValidationService {
 
     private final DataSource mysqlDataSource;
 
+    @Autowired(required = false)
     public MysqlValidationService(@Qualifier("mysqlDataSource") DataSource mysqlDataSource) {
         this.mysqlDataSource = mysqlDataSource;
     }
