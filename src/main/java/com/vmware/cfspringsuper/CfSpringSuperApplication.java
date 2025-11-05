@@ -12,6 +12,8 @@ import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfigurat
     HibernateJpaAutoConfiguration.class,
     RedisAutoConfiguration.class,
     RabbitAutoConfiguration.class
+}, excludeName = {
+    "org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration"
 })
 public class CfSpringSuperApplication {
 
