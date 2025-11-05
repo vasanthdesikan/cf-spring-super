@@ -3,13 +3,13 @@ package com.vmware.cfspringsuper.service;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -19,12 +19,9 @@ import java.util.Set;
 @Service
 public class RedisValidationService {
 
-    private final Optional<RedisTemplate<String, Object>> redisTemplate;
-
     @Autowired(required = false)
-    public RedisValidationService(RedisTemplate<String, Object> redisTemplate) {
-        this.redisTemplate = Optional.ofNullable(redisTemplate);
-    }
+    @Nullable
+    private RedisTemplate<String, Object> redisTemplate;
 
     public Map<String, Object> validateTransaction(String operation, Map<String, Object> data) {
         Map<String, Object> result = new HashMap<>();
@@ -32,33 +29,31 @@ public class RedisValidationService {
         result.put("service", "Redis/Valkey");
         result.put("operation", operation);
 
-        if (!redisTemplate.isPresent()) {
+        if (redisTemplate == null) {
             result.put("status", "error");
             result.put("message", "Redis/Valkey service not configured");
             return result;
         }
 
-        RedisTemplate<String, Object> template = redisTemplate.get();
-
         try {
             switch (operation.toLowerCase()) {
                 case "read":
                 case "get":
-                    result.putAll(performGet(data, template));
+                    result.putAll(performGet(data));
                     break;
                 case "write":
                 case "set":
-                    result.putAll(performSet(data, template));
+                    result.putAll(performSet(data));
                     break;
                 case "delete":
                 case "del":
-                    result.putAll(performDelete(data, template));
+                    result.putAll(performDelete(data));
                     break;
                 case "exists":
-                    result.putAll(performExists(data, template));
+                    result.putAll(performExists(data));
                     break;
                 case "keys":
-                    result.putAll(performKeys(data, template));
+                    result.putAll(performKeys(data));
                     break;
                 default:
                     result.put("status", "error");
@@ -76,9 +71,9 @@ public class RedisValidationService {
         return result;
     }
 
-    private Map<String, Object> performGet(Map<String, Object> data, RedisTemplate<String, Object> template) {
+    private Map<String, Object> performGet(Map<String, Object> data) {
         String key = (String) data.getOrDefault("key", "test");
-        String value = (String) template.opsForValue().get(key);
+        String value = (String) redisTemplate.opsForValue().get(key);
         
         Map<String, Object> result = new HashMap<>();
         if (value != null) {
@@ -92,15 +87,15 @@ public class RedisValidationService {
         return result;
     }
 
-    private Map<String, Object> performSet(Map<String, Object> data, RedisTemplate<String, Object> template) {
+    private Map<String, Object> performSet(Map<String, Object> data) {
         String key = (String) data.getOrDefault("key", "test_" + System.currentTimeMillis());
         String value = (String) data.getOrDefault("value", "test_value");
         Integer ttl = data.containsKey("ttl") ? Integer.parseInt(data.get("ttl").toString()) : null;
         
         if (ttl != null && ttl > 0) {
-            template.opsForValue().set(key, value, Duration.ofSeconds(ttl));
+            redisTemplate.opsForValue().set(key, value, Duration.ofSeconds(ttl));
         } else {
-            template.opsForValue().set(key, value);
+            redisTemplate.opsForValue().set(key, value);
         }
         
         Map<String, Object> result = new HashMap<>();
@@ -110,9 +105,9 @@ public class RedisValidationService {
         return result;
     }
 
-    private Map<String, Object> performDelete(Map<String, Object> data, RedisTemplate<String, Object> template) {
+    private Map<String, Object> performDelete(Map<String, Object> data) {
         String key = (String) data.getOrDefault("key", "test");
-        Boolean deleted = template.delete(key);
+        Boolean deleted = redisTemplate.delete(key);
         
         Map<String, Object> result = new HashMap<>();
         result.put("key", key);
@@ -120,9 +115,9 @@ public class RedisValidationService {
         return result;
     }
 
-    private Map<String, Object> performExists(Map<String, Object> data, RedisTemplate<String, Object> template) {
+    private Map<String, Object> performExists(Map<String, Object> data) {
         String key = (String) data.getOrDefault("key", "test");
-        Boolean exists = template.hasKey(key);
+        Boolean exists = redisTemplate.hasKey(key);
         
         Map<String, Object> result = new HashMap<>();
         result.put("key", key);
@@ -130,9 +125,9 @@ public class RedisValidationService {
         return result;
     }
 
-    private Map<String, Object> performKeys(Map<String, Object> data, RedisTemplate<String, Object> template) {
+    private Map<String, Object> performKeys(Map<String, Object> data) {
         String pattern = (String) data.getOrDefault("pattern", "*");
-        Set<String> keys = template.keys(pattern);
+        Set<String> keys = redisTemplate.keys(pattern);
         
         Map<String, Object> result = new HashMap<>();
         result.put("pattern", pattern);

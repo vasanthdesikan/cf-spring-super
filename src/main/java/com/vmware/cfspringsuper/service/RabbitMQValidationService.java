@@ -6,12 +6,12 @@ import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Service for validating RabbitMQ transactions
@@ -20,14 +20,12 @@ import java.util.Optional;
 @Service
 public class RabbitMQValidationService {
 
-    private final Optional<RabbitTemplate> rabbitTemplate;
+    @Autowired(required = false)
+    @Nullable
+    private RabbitTemplate rabbitTemplate;
+    
     private static final String DEFAULT_EXCHANGE = "";
     private static final String DEFAULT_QUEUE = "validation_test_queue";
-
-    @Autowired(required = false)
-    public RabbitMQValidationService(RabbitTemplate rabbitTemplate) {
-        this.rabbitTemplate = Optional.ofNullable(rabbitTemplate);
-    }
 
     public Map<String, Object> validateTransaction(String operation, Map<String, Object> data) {
         Map<String, Object> result = new HashMap<>();
@@ -35,26 +33,24 @@ public class RabbitMQValidationService {
         result.put("service", "RabbitMQ");
         result.put("operation", operation);
 
-        if (!rabbitTemplate.isPresent()) {
+        if (rabbitTemplate == null) {
             result.put("status", "error");
             result.put("message", "RabbitMQ service not configured");
             return result;
         }
 
-        RabbitTemplate template = rabbitTemplate.get();
-
         try {
             switch (operation.toLowerCase()) {
                 case "send":
                 case "publish":
-                    result.putAll(performSend(data, template));
+                    result.putAll(performSend(data));
                     break;
                 case "receive":
                 case "consume":
-                    result.putAll(performReceive(data, template));
+                    result.putAll(performReceive(data));
                     break;
                 case "queue":
-                    result.putAll(performQueueInfo(data, template));
+                    result.putAll(performQueueInfo(data));
                     break;
                 default:
                     result.put("status", "error");
@@ -72,12 +68,12 @@ public class RabbitMQValidationService {
         return result;
     }
 
-    private Map<String, Object> performSend(Map<String, Object> data, RabbitTemplate template) {
+    private Map<String, Object> performSend(Map<String, Object> data) {
         String exchange = (String) data.getOrDefault("exchange", DEFAULT_EXCHANGE);
         String routingKey = (String) data.getOrDefault("routingKey", DEFAULT_QUEUE);
         String message = (String) data.getOrDefault("message", "test_message_" + System.currentTimeMillis());
         
-        template.convertAndSend(exchange, routingKey, message);
+        rabbitTemplate.convertAndSend(exchange, routingKey, message);
         
         Map<String, Object> result = new HashMap<>();
         result.put("exchange", exchange.isEmpty() ? "(default)" : exchange);
@@ -87,11 +83,11 @@ public class RabbitMQValidationService {
         return result;
     }
 
-    private Map<String, Object> performReceive(Map<String, Object> data, RabbitTemplate template) {
+    private Map<String, Object> performReceive(Map<String, Object> data) {
         String queue = (String) data.getOrDefault("queue", DEFAULT_QUEUE);
         
         // Try to receive a message (with timeout)
-        Object received = template.receiveAndConvert(queue, 5000);
+        Object received = rabbitTemplate.receiveAndConvert(queue, 5000);
         
         Map<String, Object> result = new HashMap<>();
         result.put("queue", queue);
@@ -105,12 +101,12 @@ public class RabbitMQValidationService {
         return result;
     }
 
-    private Map<String, Object> performQueueInfo(Map<String, Object> data, RabbitTemplate template) {
+    private Map<String, Object> performQueueInfo(Map<String, Object> data) {
         String queue = (String) data.getOrDefault("queue", DEFAULT_QUEUE);
         
         // Declare queue to ensure it exists
         try {
-            template.execute(channel -> {
+            rabbitTemplate.execute(channel -> {
                 channel.queueDeclare(queue, true, false, false, null);
                 return null;
             });

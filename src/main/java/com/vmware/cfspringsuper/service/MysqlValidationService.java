@@ -22,12 +22,10 @@ import java.util.Map;
 @Service
 public class MysqlValidationService {
 
-    private final DataSource mysqlDataSource;
-
     @Autowired(required = false)
-    public MysqlValidationService(@Qualifier("mysqlDataSource") @Nullable DataSource mysqlDataSource) {
-        this.mysqlDataSource = mysqlDataSource;
-    }
+    @Qualifier("mysqlDataSource")
+    @Nullable
+    private DataSource mysqlDataSource;
 
     public Map<String, Object> validateTransaction(String operation, Map<String, Object> data) {
         Map<String, Object> result = new HashMap<>();

@@ -6,6 +6,7 @@ import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -23,15 +24,12 @@ public class RabbitMQConfig {
     @Autowired
     private Map<String, List<VcapServicesConfig.ServiceCredentials>> serviceCredentials;
 
-    private ConnectionFactory connectionFactory;
-
     @Bean
     public ConnectionFactory rabbitConnectionFactory() {
         List<VcapServicesConfig.ServiceCredentials> rabbitServices = serviceCredentials.get("rabbitmq");
         
         if (rabbitServices == null || rabbitServices.isEmpty()) {
             log.warn("No RabbitMQ service found in VCAP_SERVICES");
-            this.connectionFactory = null;
             return null;
         }
 
@@ -72,18 +70,13 @@ public class RabbitMQConfig {
             }
         }
 
-        this.connectionFactory = factory;
         return factory;
     }
 
     @Bean
-    public RabbitTemplate rabbitTemplate() {
-        if (this.connectionFactory == null) {
-            log.warn("RabbitMQ ConnectionFactory is null - RabbitTemplate will not be created");
-            return null;
-        }
-
-        RabbitTemplate template = new RabbitTemplate(this.connectionFactory);
+    @ConditionalOnBean(ConnectionFactory.class)
+    public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory) {
+        RabbitTemplate template = new RabbitTemplate(connectionFactory);
         template.setMessageConverter(new Jackson2JsonMessageConverter());
         return template;
     }

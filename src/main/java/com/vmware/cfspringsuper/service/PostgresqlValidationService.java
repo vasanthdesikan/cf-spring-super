@@ -22,12 +22,10 @@ import java.util.Map;
 @Service
 public class PostgresqlValidationService {
 
-    private final DataSource postgresDataSource;
-
     @Autowired(required = false)
-    public PostgresqlValidationService(@Qualifier("postgresDataSource") @Nullable DataSource postgresDataSource) {
-        this.postgresDataSource = postgresDataSource;
-    }
+    @Qualifier("postgresDataSource")
+    @Nullable
+    private DataSource postgresDataSource;
 
     public Map<String, Object> validateTransaction(String operation, Map<String, Object> data) {
         Map<String, Object> result = new HashMap<>();
