@@ -1,6 +1,7 @@
 package com.vmware.cfspringsuper.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +20,7 @@ public class RedisValidationService {
 
     private final RedisTemplate<String, Object> redisTemplate;
 
+    @Autowired(required = false)
     public RedisValidationService(RedisTemplate<String, Object> redisTemplate) {
         this.redisTemplate = redisTemplate;
     }

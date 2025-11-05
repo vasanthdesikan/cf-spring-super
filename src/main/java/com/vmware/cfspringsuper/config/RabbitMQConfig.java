@@ -75,6 +75,7 @@ public class RabbitMQConfig {
     @Bean
     public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory) {
         if (connectionFactory == null) {
+            log.warn("RabbitMQ ConnectionFactory is null - RabbitTemplate will not be created");
             return null;
         }
 
