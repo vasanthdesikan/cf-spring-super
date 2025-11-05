@@ -1,0 +1,18 @@
+---
+applications:
+  - name: cf-spring-super
+    memory: 512M
+    instances: 1
+    buildpacks:
+      - java_buildpack
+    path: target/cf-spring-super-1.0.0.jar
+    env:
+      JAVA_OPTS: -XX:ReservedCodeCacheSize=128M -XX:MaxMetaspaceSize=256M
+      SPRING_PROFILES_ACTIVE: cloud
+    services:
+      # Uncomment and configure based on your service instances
+      # - mysql-service
+      # - postgresql-service
+      # - redis-service
+      # - rabbitmq-service
+

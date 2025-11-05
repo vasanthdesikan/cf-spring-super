@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tanzu Data Services Validation</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f5f5f5;
+            padding-top: 20px;
+        }
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        .nav-tabs {
+            border-bottom: 2px solid #dee2e6;
+            margin-bottom: 20px;
+        }
+        .nav-tabs .nav-link {
+            color: #495057;
+            border: none;
+            border-bottom: 3px solid transparent;
+            padding: 12px 24px;
+            font-weight: 500;
+        }
+        .nav-tabs .nav-link:hover {
+            border-color: #e9ecef;
+            color: #007bff;
+        }
+        .nav-tabs .nav-link.active {
+            color: #007bff;
+            border-bottom-color: #007bff;
+            background-color: transparent;
+        }
+        .tab-content {
+            min-height: 400px;
+        }
+        .operation-section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        .operation-section h5 {
+            color: #495057;
+            margin-bottom: 15px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .result-box {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            background: #f8f9fa;
+            border-left: 4px solid #007bff;
+        }
+        .result-box.success {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+        .result-box.error {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+        }
+        .result-box pre {
+            margin: 0;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .btn {
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        .service-icon {
+            font-size: 1.2em;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container main-container">
+        <h1 class="mb-4">
+            <i class="fas fa-cloud service-icon"></i>
+            Tanzu Data Services Validation
+        </h1>
+        <p class="text-muted mb-4">Validate transactions against Cloud Foundry data services</p>
+
+        <!-- Nav Tabs -->
+        <ul class="nav nav-tabs" id="serviceTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="mysql-tab" data-bs-toggle="tab" data-bs-target="#mysql" type="button" role="tab">
+                    <i class="fas fa-database service-icon"></i>MySQL
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="postgresql-tab" data-bs-toggle="tab" data-bs-target="#postgresql" type="button" role="tab">
+                    <i class="fas fa-database service-icon"></i>PostgreSQL
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="redis-tab" data-bs-toggle="tab" data-bs-target="#redis" type="button" role="tab">
+                    <i class="fas fa-memory service-icon"></i>Redis/Valkey
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="rabbitmq-tab" data-bs-toggle="tab" data-bs-target="#rabbitmq" type="button" role="tab">
+                    <i class="fas fa-exchange-alt service-icon"></i>RabbitMQ
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="serviceTabContent">
+            <!-- MySQL Tab -->
+            <div class="tab-pane fade show active" id="mysql" role="tabpanel">
+                <div class="operation-section">
+                    <h5><i class="fas fa-search"></i> Read Operation</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="mysql-read-key" placeholder="Key name" value="test">
+                        </div>
+                        <div class="col-md-8">
+                            <button class="btn btn-primary" onclick="validateMysql('read')">Execute Read</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="operation-section">
+                    <h5><i class="fas fa-plus"></i> Write Operation</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control mb-2" id="mysql-write-key" placeholder="Key name" value="test">
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" class="form-control mb-2" id="mysql-write-value" placeholder="Value">
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-success" onclick="validateMysql('write')">Execute Write</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="operation-section">
+                    <h5><i class="fas fa-edit"></i> Update Operation</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control mb-2" id="mysql-update-key" placeholder="Key name" value="test">
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" class="form-control mb-2" id="mysql-update-value" placeholder="New value">
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-warning" onclick="validateMysql('update')">Execute Update</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="operation-section">
+                    <h5><i class="fas fa-trash"></i> Delete Operation</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="mysql-delete-key" placeholder="Key name" value="test">
+                        </div>
+                        <div class="col-md-8">
+                            <button class="btn btn-danger" onclick="validateMysql('delete')">Execute Delete</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="mysql-result"></div>
+            </div>
+
+            <!-- PostgreSQL Tab -->
+            <div class="tab-pane fade" id="postgresql" role="tabpanel">
+                <div class="operation-section">
+                    <h5><i class="fas fa-search"></i> Read Operation</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="postgresql-read-key" placeholder="Key name" value="test">
+                        </div>
+                        <div class="col-md-8">
+                            <button class="btn btn-primary" onclick="validatePostgresql('read')">Execute Read</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="operation-section">
+                    <h5><i class="fas fa-plus"></i> Write Operation</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control mb-2" id="postgresql-write-key" placeholder="Key name" value="test">
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" class="form-control mb-2" id="postgresql-write-value" placeholder="Value">
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-success" onclick="validatePostgresql('write')">Execute Write</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="operation-section">
+                    <h5><i class="fas fa-edit"></i> Update Operation</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control mb-2" id="postgresql-update-key" placeholder="Key name" value="test">
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" class="form-control mb-2" id="postgresql-update-value" placeholder="New value">
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-warning" onclick="validatePostgresql('update')">Execute Update</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="operation-section">
+                    <h5><i class="fas fa-trash"></i> Delete Operation</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="postgresql-delete-key" placeholder="Key name" value="test">
+                        </div>
+                        <div class="col-md-8">
+                            <button class="btn btn-danger" onclick="validatePostgresql('delete')">Execute Delete</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="postgresql-result"></div>
+            </div>
+
+            <!-- Redis/Valkey Tab -->
+            <div class="tab-pane fade" id="redis" role="tabpanel">
+                <div class="operation-section">
+                    <h5><i class="fas fa-search"></i> Get Operation</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="redis-get-key" placeholder="Key name" value="test">
+                        </div>
+                        <div class="col-md-8">
+                            <button class="btn btn-primary" onclick="validateRedis('get')">Execute Get</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="operation-section">
+                    <h5><i class="fas fa-plus"></i> Set Operation</h5>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <input type="text" class="form-control mb-2" id="redis-set-key" placeholder="Key name" value="test">
+                        </div>
+                        <div class="col-md-3">
+                            <input type="text" class="form-control mb-2" id="redis-set-value" placeholder="Value">
+                        </div>
+                        <div class="col-md-3">
+                            <input type="number" class="form-control mb-2" id="redis-set-ttl" placeholder="TTL (seconds, optional)">
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-success" onclick="validateRedis('set')">Execute Set</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="operation-section">
+                    <h5><i class="fas fa-check"></i> Exists Operation</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="redis-exists-key" placeholder="Key name" value="test">
+                        </div>
+                        <div class="col-md-8">
+                            <button class="btn btn-info" onclick="validateRedis('exists')">Check Exists</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="operation-section">
+                    <h5><i class="fas fa-list"></i> Keys Operation</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="redis-keys-pattern" placeholder="Pattern (e.g., test*)" value="*">
+                        </div>
+                        <div class="col-md-8">
+                            <button class="btn btn-info" onclick="validateRedis('keys')">List Keys</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="operation-section">
+                    <h5><i class="fas fa-trash"></i> Delete Operation</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="redis-delete-key" placeholder="Key name" value="test">
+                        </div>
+                        <div class="col-md-8">
+                            <button class="btn btn-danger" onclick="validateRedis('delete')">Execute Delete</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="redis-result"></div>
+            </div>
+
+            <!-- RabbitMQ Tab -->
+            <div class="tab-pane fade" id="rabbitmq" role="tabpanel">
+                <div class="operation-section">
+                    <h5><i class="fas fa-paper-plane"></i> Send/Publish Operation</h5>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <input type="text" class="form-control mb-2" id="rabbitmq-send-exchange" placeholder="Exchange (optional)">
+                        </div>
+                        <div class="col-md-3">
+                            <input type="text" class="form-control mb-2" id="rabbitmq-send-routing" placeholder="Routing Key/Queue" value="validation_test_queue">
+                        </div>
+                        <div class="col-md-3">
+                            <input type="text" class="form-control mb-2" id="rabbitmq-send-message" placeholder="Message">
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-success" onclick="validateRabbitMQ('send')">Send Message</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="operation-section">
+                    <h5><i class="fas fa-inbox"></i> Receive/Consume Operation</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="rabbitmq-receive-queue" placeholder="Queue name" value="validation_test_queue">
+                        </div>
+                        <div class="col-md-8">
+                            <button class="btn btn-primary" onclick="validateRabbitMQ('receive')">Receive Message</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="operation-section">
+                    <h5><i class="fas fa-info-circle"></i> Queue Info</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="rabbitmq-queue-name" placeholder="Queue name" value="validation_test_queue">
+                        </div>
+                        <div class="col-md-8">
+                            <button class="btn btn-info" onclick="validateRabbitMQ('queue')">Get Queue Info</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="rabbitmq-result"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function validateMysql(operation) {
+            const data = {};
+            if (operation === 'read') {
+                data.key = document.getElementById('mysql-read-key').value;
+            } else if (operation === 'write') {
+                data.key = document.getElementById('mysql-write-key').value;
+                data.value = document.getElementById('mysql-write-value').value;
+            } else if (operation === 'update') {
+                data.key = document.getElementById('mysql-update-key').value;
+                data.value = document.getElementById('mysql-update-value').value;
+            } else if (operation === 'delete') {
+                data.key = document.getElementById('mysql-delete-key').value;
+            }
+
+            fetch(`/api/mysql/validate?operation=${operation}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => displayResult('mysql-result', result))
+            .catch(error => displayError('mysql-result', error));
+        }
+
+        function validatePostgresql(operation) {
+            const data = {};
+            if (operation === 'read') {
+                data.key = document.getElementById('postgresql-read-key').value;
+            } else if (operation === 'write') {
+                data.key = document.getElementById('postgresql-write-key').value;
+                data.value = document.getElementById('postgresql-write-value').value;
+            } else if (operation === 'update') {
+                data.key = document.getElementById('postgresql-update-key').value;
+                data.value = document.getElementById('postgresql-update-value').value;
+            } else if (operation === 'delete') {
+                data.key = document.getElementById('postgresql-delete-key').value;
+            }
+
+            fetch(`/api/postgresql/validate?operation=${operation}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => displayResult('postgresql-result', result))
+            .catch(error => displayError('postgresql-result', error));
+        }
+
+        function validateRedis(operation) {
+            const data = {};
+            if (operation === 'get') {
+                data.key = document.getElementById('redis-get-key').value;
+            } else if (operation === 'set') {
+                data.key = document.getElementById('redis-set-key').value;
+                data.value = document.getElementById('redis-set-value').value;
+                const ttl = document.getElementById('redis-set-ttl').value;
+                if (ttl) data.ttl = parseInt(ttl);
+            } else if (operation === 'exists') {
+                data.key = document.getElementById('redis-exists-key').value;
+            } else if (operation === 'keys') {
+                data.pattern = document.getElementById('redis-keys-pattern').value;
+            } else if (operation === 'delete') {
+                data.key = document.getElementById('redis-delete-key').value;
+            }
+
+            fetch(`/api/redis/validate?operation=${operation}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => displayResult('redis-result', result))
+            .catch(error => displayError('redis-result', error));
+        }
+
+        function validateRabbitMQ(operation) {
+            const data = {};
+            if (operation === 'send') {
+                data.exchange = document.getElementById('rabbitmq-send-exchange').value;
+                data.routingKey = document.getElementById('rabbitmq-send-routing').value;
+                data.message = document.getElementById('rabbitmq-send-message').value;
+            } else if (operation === 'receive') {
+                data.queue = document.getElementById('rabbitmq-receive-queue').value;
+            } else if (operation === 'queue') {
+                data.queue = document.getElementById('rabbitmq-queue-name').value;
+            }
+
+            fetch(`/api/rabbitmq/validate?operation=${operation}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => displayResult('rabbitmq-result', result))
+            .catch(error => displayError('rabbitmq-result', error));
+        }
+
+        function displayResult(elementId, result) {
+            const element = document.getElementById(elementId);
+            const statusClass = result.status === 'success' ? 'success' : 'error';
+            element.innerHTML = `
+                <div class="result-box ${statusClass}">
+                    <h6>Result:</h6>
+                    <pre>${JSON.stringify(result, null, 2)}</pre>
+                </div>
+            `;
+        }
+
+        function displayError(elementId, error) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `
+                <div class="result-box error">
+                    <h6>Error:</h6>
+                    <pre>${error.toString()}</pre>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
+
