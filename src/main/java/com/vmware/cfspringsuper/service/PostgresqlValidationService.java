@@ -3,6 +3,7 @@ package com.vmware.cfspringsuper.service;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
@@ -24,7 +25,7 @@ public class PostgresqlValidationService {
     private final DataSource postgresDataSource;
 
     @Autowired(required = false)
-    public PostgresqlValidationService(@Qualifier("postgresDataSource") DataSource postgresDataSource) {
+    public PostgresqlValidationService(@Qualifier("postgresDataSource") @Nullable DataSource postgresDataSource) {
         this.postgresDataSource = postgresDataSource;
     }
 

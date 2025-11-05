@@ -23,6 +23,8 @@ public class RedisConfig {
     @Autowired
     private Map<String, List<VcapServicesConfig.ServiceCredentials>> serviceCredentials;
 
+    private RedisConnectionFactory connectionFactory;
+
     @Bean
     public RedisConnectionFactory redisConnectionFactory() {
         // Try to find Redis or Valkey service
@@ -67,17 +69,19 @@ public class RedisConfig {
         // Note: TLS configuration would need additional setup for Lettuce
         // For now, we'll use the TLS port but full TLS setup may require additional configuration
         
+        this.connectionFactory = factory;
         return factory;
     }
 
     @Bean
-    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
-        if (connectionFactory == null) {
+    public RedisTemplate<String, Object> redisTemplate() {
+        if (this.connectionFactory == null) {
+            log.warn("Redis ConnectionFactory is null - RedisTemplate will not be created");
             return null;
         }
 
         RedisTemplate<String, Object> template = new RedisTemplate<>();
-        template.setConnectionFactory(connectionFactory);
+        template.setConnectionFactory(this.connectionFactory);
         template.setKeySerializer(new StringRedisSerializer());
         template.setValueSerializer(new StringRedisSerializer());
         template.setHashKeySerializer(new StringRedisSerializer());

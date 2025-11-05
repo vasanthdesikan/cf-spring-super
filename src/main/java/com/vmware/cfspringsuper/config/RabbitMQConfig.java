@@ -23,12 +23,15 @@ public class RabbitMQConfig {
     @Autowired
     private Map<String, List<VcapServicesConfig.ServiceCredentials>> serviceCredentials;
 
+    private ConnectionFactory connectionFactory;
+
     @Bean
     public ConnectionFactory rabbitConnectionFactory() {
         List<VcapServicesConfig.ServiceCredentials> rabbitServices = serviceCredentials.get("rabbitmq");
         
         if (rabbitServices == null || rabbitServices.isEmpty()) {
             log.warn("No RabbitMQ service found in VCAP_SERVICES");
+            this.connectionFactory = null;
             return null;
         }
 
@@ -69,17 +72,18 @@ public class RabbitMQConfig {
             }
         }
 
+        this.connectionFactory = factory;
         return factory;
     }
 
     @Bean
-    public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory) {
-        if (connectionFactory == null) {
+    public RabbitTemplate rabbitTemplate() {
+        if (this.connectionFactory == null) {
             log.warn("RabbitMQ ConnectionFactory is null - RabbitTemplate will not be created");
             return null;
         }
 
-        RabbitTemplate template = new RabbitTemplate(connectionFactory);
+        RabbitTemplate template = new RabbitTemplate(this.connectionFactory);
         template.setMessageConverter(new Jackson2JsonMessageConverter());
         return template;
     }

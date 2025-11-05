@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Service for validating RabbitMQ transactions
@@ -19,13 +20,13 @@ import java.util.Map;
 @Service
 public class RabbitMQValidationService {
 
-    private final RabbitTemplate rabbitTemplate;
+    private final Optional<RabbitTemplate> rabbitTemplate;
     private static final String DEFAULT_EXCHANGE = "";
     private static final String DEFAULT_QUEUE = "validation_test_queue";
 
     @Autowired(required = false)
     public RabbitMQValidationService(RabbitTemplate rabbitTemplate) {
-        this.rabbitTemplate = rabbitTemplate;
+        this.rabbitTemplate = Optional.ofNullable(rabbitTemplate);
     }
 
     public Map<String, Object> validateTransaction(String operation, Map<String, Object> data) {
@@ -34,24 +35,26 @@ public class RabbitMQValidationService {
         result.put("service", "RabbitMQ");
         result.put("operation", operation);
 
-        if (rabbitTemplate == null) {
+        if (!rabbitTemplate.isPresent()) {
             result.put("status", "error");
             result.put("message", "RabbitMQ service not configured");
             return result;
         }
 
+        RabbitTemplate template = rabbitTemplate.get();
+
         try {
             switch (operation.toLowerCase()) {
                 case "send":
                 case "publish":
-                    result.putAll(performSend(data));
+                    result.putAll(performSend(data, template));
                     break;
                 case "receive":
                 case "consume":
-                    result.putAll(performReceive(data));
+                    result.putAll(performReceive(data, template));
                     break;
                 case "queue":
-                    result.putAll(performQueueInfo(data));
+                    result.putAll(performQueueInfo(data, template));
                     break;
                 default:
                     result.put("status", "error");
@@ -69,12 +72,12 @@ public class RabbitMQValidationService {
         return result;
     }
 
-    private Map<String, Object> performSend(Map<String, Object> data) {
+    private Map<String, Object> performSend(Map<String, Object> data, RabbitTemplate template) {
         String exchange = (String) data.getOrDefault("exchange", DEFAULT_EXCHANGE);
         String routingKey = (String) data.getOrDefault("routingKey", DEFAULT_QUEUE);
         String message = (String) data.getOrDefault("message", "test_message_" + System.currentTimeMillis());
         
-        rabbitTemplate.convertAndSend(exchange, routingKey, message);
+        template.convertAndSend(exchange, routingKey, message);
         
         Map<String, Object> result = new HashMap<>();
         result.put("exchange", exchange.isEmpty() ? "(default)" : exchange);
@@ -84,11 +87,11 @@ public class RabbitMQValidationService {
         return result;
     }
 
-    private Map<String, Object> performReceive(Map<String, Object> data) {
+    private Map<String, Object> performReceive(Map<String, Object> data, RabbitTemplate template) {
         String queue = (String) data.getOrDefault("queue", DEFAULT_QUEUE);
         
         // Try to receive a message (with timeout)
-        Object received = rabbitTemplate.receiveAndConvert(queue, 5000);
+        Object received = template.receiveAndConvert(queue, 5000);
         
         Map<String, Object> result = new HashMap<>();
         result.put("queue", queue);
@@ -102,12 +105,12 @@ public class RabbitMQValidationService {
         return result;
     }
 
-    private Map<String, Object> performQueueInfo(Map<String, Object> data) {
+    private Map<String, Object> performQueueInfo(Map<String, Object> data, RabbitTemplate template) {
         String queue = (String) data.getOrDefault("queue", DEFAULT_QUEUE);
         
         // Declare queue to ensure it exists
         try {
-            rabbitTemplate.execute(channel -> {
+            template.execute(channel -> {
                 channel.queueDeclare(queue, true, false, false, null);
                 return null;
             });
