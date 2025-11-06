@@ -61,6 +61,9 @@ public class MysqlValidationService {
                 case "listall":
                     result.putAll(performListAll(conn));
                     break;
+                case "listtables":
+                    result.putAll(performListTables(conn));
+                    break;
                 default:
                     result.put("status", "error");
                     result.put("message", "Unsupported operation: " + operation);
@@ -185,6 +188,32 @@ public class MysqlValidationService {
             Map<String, Object> result = new HashMap<>();
             result.put("rows", rows);
             result.put("count", rows.size());
+            return result;
+        }
+    }
+
+    private Map<String, Object> performListTables(Connection conn) throws Exception {
+        String sql = "SELECT TABLE_NAME, TABLE_TYPE, TABLE_ROWS, DATA_LENGTH " +
+                     "FROM INFORMATION_SCHEMA.TABLES " +
+                     "WHERE TABLE_SCHEMA = DATABASE() " +
+                     "ORDER BY TABLE_NAME";
+        
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            
+            List<Map<String, Object>> tables = new ArrayList<>();
+            while (rs.next()) {
+                Map<String, Object> table = new HashMap<>();
+                table.put("name", rs.getString("TABLE_NAME"));
+                table.put("type", rs.getString("TABLE_TYPE"));
+                table.put("rows", rs.getLong("TABLE_ROWS"));
+                table.put("data_length", rs.getLong("DATA_LENGTH"));
+                tables.add(table);
+            }
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("tables", tables);
+            result.put("count", tables.size());
             return result;
         }
     }

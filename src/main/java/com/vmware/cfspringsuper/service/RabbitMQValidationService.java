@@ -14,6 +14,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Service for validating RabbitMQ transactions
@@ -25,6 +33,9 @@ public class RabbitMQValidationService {
     @Autowired(required = false)
     @Nullable
     private RabbitTemplate rabbitTemplate;
+    
+    @Autowired
+    private Map<String, List<com.vmware.cfspringsuper.config.VcapServicesConfig.ServiceCredentials>> serviceCredentials;
     
     private static final String DEFAULT_EXCHANGE = "";
     private static final String DEFAULT_QUEUE = "validation_test_queue";
@@ -130,43 +141,140 @@ public class RabbitMQValidationService {
         List<Map<String, Object>> queues = new ArrayList<>();
         
         try {
-            // Try to get queue information using RabbitMQ management API pattern
-            // Since we may not have management API access, we'll use a workaround:
-            // Try to declare and get info for common queues
-            List<String> commonQueues = List.of("validation_test_queue", "amq.gen", "amq.default");
-            
-            for (String queueName : commonQueues) {
-                try {
-                    Map<String, Object> queueInfo = rabbitTemplate.execute(channel -> {
-                        try {
-                            channel.queueDeclarePassive(queueName);
-                            // Queue exists
-                            Map<String, Object> info = new HashMap<>();
-                            info.put("name", queueName);
-                            info.put("exists", true);
-                            return info;
-                        } catch (Exception e) {
-                            // Queue doesn't exist or we can't access it
-                            return null;
-                        }
-                    });
-                    
-                    if (queueInfo != null) {
-                        queues.add(new HashMap<>(queueInfo));
-                    }
-                } catch (Exception e) {
-                    // Ignore errors for individual queues
-                }
+            // Try to use RabbitMQ Management API if available
+            String managementUri = getManagementUri();
+            if (managementUri != null && !managementUri.isEmpty()) {
+                queues = listQueuesViaManagementApi(managementUri);
+            } else {
+                // Fallback: try to list queues using AMQP channel
+                queues = listQueuesViaAmqp();
             }
         } catch (Exception e) {
             log.warn("Error listing queues: {}", e.getMessage());
+            // Fallback to AMQP method
+            try {
+                queues = listQueuesViaAmqp();
+            } catch (Exception ex) {
+                log.error("Error listing queues via AMQP: {}", ex.getMessage());
+            }
         }
         
         Map<String, Object> result = new HashMap<>();
         result.put("queues", queues);
         result.put("count", queues.size());
-        result.put("note", "Full queue listing requires RabbitMQ Management API");
         return result;
+    }
+    
+    private String getManagementUri() {
+        // Get management URI from VCAP_SERVICES
+        List<com.vmware.cfspringsuper.config.VcapServicesConfig.ServiceCredentials> rabbitServices = 
+            serviceCredentials.get("rabbitmq");
+        if (rabbitServices != null && !rabbitServices.isEmpty()) {
+            String uri = rabbitServices.get(0).getManagementUri();
+            if (uri != null && !uri.isEmpty()) {
+                return uri + "/api/queues";
+            }
+        }
+        return null;
+    }
+    
+    private List<Map<String, Object>> listQueuesViaManagementApi(String managementUri) {
+        List<Map<String, Object>> queues = new ArrayList<>();
+        try {
+            HttpClient client = HttpClient.newHttpClient();
+            
+            // Get credentials from connection factory
+            String username = "guest";
+            String password = "guest";
+            if (rabbitTemplate != null && rabbitTemplate.getConnectionFactory() != null) {
+                try {
+                    org.springframework.amqp.rabbit.connection.Connection connection = 
+                        rabbitTemplate.getConnectionFactory().createConnection();
+                    if (connection != null) {
+                        username = connection.getDelegate().getUsername();
+                        password = new String(connection.getDelegate().getPassword());
+                    }
+                } catch (Exception e) {
+                    log.debug("Could not extract credentials: {}", e.getMessage());
+                }
+            }
+            
+            String auth = username + ":" + password;
+            String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes(StandardCharsets.UTF_8));
+            
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(managementUri))
+                .header("Authorization", "Basic " + encodedAuth)
+                .GET()
+                .build();
+            
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            
+            if (response.statusCode() == 200) {
+                ObjectMapper mapper = new ObjectMapper();
+                JsonNode queuesJson = mapper.readTree(response.body());
+                
+                for (JsonNode queue : queuesJson) {
+                    Map<String, Object> queueInfo = new HashMap<>();
+                    queueInfo.put("name", queue.get("name").asText());
+                    queueInfo.put("messages", queue.has("messages") ? queue.get("messages").asInt() : 0);
+                    queueInfo.put("consumers", queue.has("consumers") ? queue.get("consumers").asInt() : 0);
+                    queueInfo.put("vhost", queue.has("vhost") ? queue.get("vhost").asText() : "/");
+                    queues.add(queueInfo);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to list queues via Management API: {}", e.getMessage());
+        }
+        return queues;
+    }
+    
+    private List<Map<String, Object>> listQueuesViaAmqp() {
+        List<Map<String, Object>> queues = new ArrayList<>();
+        try {
+            // Use AMQP to try discovering queues
+            // Note: This is limited - AMQP doesn't have a standard way to list all queues
+            // We can only check specific queue names
+            rabbitTemplate.execute(channel -> {
+                // Try common queue patterns
+                java.util.List<String> commonQueuePatterns = java.util.List.of(
+                    "amq.gen-", "amq.default", "validation_test_queue"
+                );
+                
+                for (String pattern : commonQueuePatterns) {
+                    try {
+                        if (pattern.endsWith("-")) {
+                            // Dynamic queues - try to enumerate
+                            for (int i = 0; i < 100; i++) {
+                                String queueName = pattern + i;
+                                try {
+                                    channel.queueDeclarePassive(queueName);
+                                    Map<String, Object> info = new HashMap<>();
+                                    info.put("name", queueName);
+                                    info.put("exists", true);
+                                    queues.add(info);
+                                } catch (Exception e) {
+                                    // Queue doesn't exist
+                                    break;
+                                }
+                            }
+                        } else {
+                            channel.queueDeclarePassive(pattern);
+                            Map<String, Object> info = new HashMap<>();
+                            info.put("name", pattern);
+                            info.put("exists", true);
+                            queues.add(info);
+                        }
+                    } catch (Exception e) {
+                        // Queue doesn't exist
+                    }
+                }
+                return null;
+            });
+        } catch (Exception e) {
+            log.warn("Error listing queues via AMQP: {}", e.getMessage());
+        }
+        return queues;
     }
 }
 

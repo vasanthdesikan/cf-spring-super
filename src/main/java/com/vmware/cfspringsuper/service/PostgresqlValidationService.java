@@ -61,6 +61,9 @@ public class PostgresqlValidationService {
                 case "listall":
                     result.putAll(performListAll(conn));
                     break;
+                case "listtables":
+                    result.putAll(performListTables(conn));
+                    break;
                 default:
                     result.put("status", "error");
                     result.put("message", "Unsupported operation: " + operation);
@@ -180,6 +183,32 @@ public class PostgresqlValidationService {
             Map<String, Object> result = new HashMap<>();
             result.put("rows", rows);
             result.put("count", rows.size());
+            return result;
+        }
+    }
+
+    private Map<String, Object> performListTables(Connection conn) throws Exception {
+        String sql = "SELECT table_name, table_type, " +
+                     "COALESCE((SELECT reltuples::bigint FROM pg_class WHERE relname = table_name), 0) as row_count " +
+                     "FROM information_schema.tables " +
+                     "WHERE table_schema = 'public' " +
+                     "ORDER BY table_name";
+        
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            
+            List<Map<String, Object>> tables = new ArrayList<>();
+            while (rs.next()) {
+                Map<String, Object> table = new HashMap<>();
+                table.put("name", rs.getString("table_name"));
+                table.put("type", rs.getString("table_type"));
+                table.put("rows", rs.getLong("row_count"));
+                tables.add(table);
+            }
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("tables", tables);
+            result.put("count", tables.size());
             return result;
         }
     }

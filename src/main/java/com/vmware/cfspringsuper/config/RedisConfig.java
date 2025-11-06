@@ -43,7 +43,14 @@ public class RedisConfig {
         log.info("Configuring Redis/Valkey connection for service: {}", creds.getServiceName());
 
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
-        config.setHostName(creds.getHost());
+        
+        // Resolve hostname to IP if needed
+        String host = creds.getHost();
+        if (host != null && host.contains("<unresolved>")) {
+            log.error("Redis hostname contains <unresolved>: {}", host);
+            return null;
+        }
+        config.setHostName(host);
         
         // For user-provided services: use service_gateway_access_port if available, otherwise use port
         // For standard services: use TLS port if enabled, otherwise use regular port
@@ -74,6 +81,10 @@ public class RedisConfig {
         }
 
         LettuceConnectionFactory factory = new LettuceConnectionFactory(config);
+        
+        // Configure DNS resolution timeout
+        factory.setValidateConnection(true);
+        factory.setShutdownTimeout(java.time.Duration.ofSeconds(2));
         
         // Note: TLS configuration would need additional setup for Lettuce
         // For now, we'll use the TLS port but full TLS setup may require additional configuration

@@ -59,6 +59,9 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  health:
+    rabbit:
+      enabled: false  # Disable RabbitMQ health check to prevent crashes when RMQ is unavailable
 
 # Logging
 logging:
