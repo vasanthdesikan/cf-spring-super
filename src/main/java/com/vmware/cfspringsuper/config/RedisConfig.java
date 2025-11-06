@@ -12,6 +12,8 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.lang.Nullable;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.List;
 import java.util.Map;
 
@@ -44,17 +46,47 @@ public class RedisConfig {
 
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
         
-        // Resolve hostname to IP if needed
+        // Extract and resolve hostname
         String host = creds.getHost();
         if (host == null || host.isEmpty()) {
             log.error("Redis host is null or empty");
             return null;
         }
-        if (host.contains("<unresolved>")) {
-            log.error("Redis hostname contains <unresolved>: {}", host);
+        
+        log.info("Original Redis host from VCAP_SERVICES: {}", host);
+        
+        // Clean up hostname - remove <unresolved> marker and everything after /
+        // Handle format: hostname/<unresolved>:port or hostname/<unresolved>
+        String cleanHost = host;
+        if (cleanHost.contains("/")) {
+            cleanHost = cleanHost.substring(0, cleanHost.indexOf("/"));
+            log.info("Extracted hostname (removed part after /): {}", cleanHost);
+        }
+        if (cleanHost.contains("<unresolved>")) {
+            cleanHost = cleanHost.replace("<unresolved>", "").trim();
+            log.info("Removed <unresolved> marker from hostname: {}", cleanHost);
+        }
+        // Remove any trailing whitespace or special characters
+        cleanHost = cleanHost.trim();
+        
+        if (cleanHost.isEmpty()) {
+            log.error("Hostname is empty after cleaning: {}", host);
             return null;
         }
-        config.setHostName(host);
+        
+        log.info("Cleaned Redis hostname: {}", cleanHost);
+        
+        // Resolve hostname to IP address
+        String resolvedHost = resolveHostname(cleanHost);
+        if (resolvedHost == null) {
+            log.warn("Failed to resolve Redis hostname to IP: {}. Will use hostname directly - DNS resolution may work at connection time.", cleanHost);
+            // Use the cleaned hostname - Lettuce may be able to resolve it at connection time
+            resolvedHost = cleanHost;
+        } else {
+            log.info("Successfully resolved Redis hostname {} to IP: {}", cleanHost, resolvedHost);
+        }
+        
+        config.setHostName(resolvedHost);
         
         // For user-provided services: use service_gateway_access_port if available, otherwise use port
         // For standard services: use TLS port if enabled, otherwise use regular port
@@ -109,6 +141,45 @@ public class RedisConfig {
         template.setHashKeySerializer(new StringRedisSerializer());
         template.setHashValueSerializer(new StringRedisSerializer());
         return template;
+    }
+    
+    /**
+     * Resolve hostname to IP address
+     * @param hostname The hostname to resolve
+     * @return The IP address as a string, or null if resolution fails
+     */
+    private String resolveHostname(String hostname) {
+        if (hostname == null || hostname.isEmpty()) {
+            return null;
+        }
+        
+        // Check if it's already an IP address
+        if (isIpAddress(hostname)) {
+            return hostname;
+        }
+        
+        try {
+            InetAddress address = InetAddress.getByName(hostname);
+            String ip = address.getHostAddress();
+            log.debug("Resolved hostname {} to IP {}", hostname, ip);
+            return ip;
+        } catch (UnknownHostException e) {
+            log.warn("Failed to resolve hostname {}: {}", hostname, e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * Check if a string is an IP address
+     * @param str The string to check
+     * @return true if the string appears to be an IP address
+     */
+    private boolean isIpAddress(String str) {
+        if (str == null || str.isEmpty()) {
+            return false;
+        }
+        // Simple check: contains dots and is numeric segments
+        return str.matches("^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$");
     }
 }
 

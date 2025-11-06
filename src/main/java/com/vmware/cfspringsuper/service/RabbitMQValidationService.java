@@ -137,28 +137,35 @@ public class RabbitMQValidationService {
     private Map<String, Object> performListQueues() {
         List<Map<String, Object>> queues = new ArrayList<>();
         
-        try {
-            // Try to use RabbitMQ Management API if available
-            String managementUri = getManagementUri();
-            if (managementUri != null && !managementUri.isEmpty()) {
-                queues = listQueuesViaManagementApi(managementUri);
+        // Try Management API first - this is the only reliable way to get all queues
+        String managementUri = getManagementUri();
+        if (managementUri != null && !managementUri.isEmpty()) {
+            log.info("Attempting to list queues via Management API: {}", managementUri);
+            queues = listQueuesViaManagementApi(managementUri);
+            if (queues.isEmpty()) {
+                log.warn("Management API returned empty queue list. This might indicate an authentication issue or no queues exist.");
             } else {
-                // Fallback: try to list queues using AMQP channel
-                queues = listQueuesViaAmqp();
+                log.info("Successfully retrieved {} queues via Management API", queues.size());
             }
-        } catch (Exception e) {
-            log.warn("Error listing queues: {}", e.getMessage());
-            // Fallback to AMQP method
-            try {
-                queues = listQueuesViaAmqp();
-            } catch (Exception ex) {
-                log.error("Error listing queues via AMQP: {}", ex.getMessage());
-            }
+        } else {
+            log.warn("Management URI not available in VCAP_SERVICES. Cannot list all queues - only checking known queue names via AMQP.");
+            queues = listQueuesViaAmqp();
+        }
+        
+        // If Management API failed or returned empty, try AMQP as fallback
+        if (queues.isEmpty() && managementUri != null && !managementUri.isEmpty()) {
+            log.warn("Management API did not return queues, falling back to AMQP method (limited to known queues)");
+            queues = listQueuesViaAmqp();
         }
         
         Map<String, Object> result = new HashMap<>();
         result.put("queues", queues);
         result.put("count", queues.size());
+        if (managementUri == null || managementUri.isEmpty()) {
+            result.put("note", "Management API not available. Only known queues are shown. For complete queue listing, Management API must be enabled in RabbitMQ service.");
+        } else if (queues.isEmpty()) {
+            result.put("note", "No queues found or Management API access denied. Check RabbitMQ service configuration.");
+        }
         return result;
     }
     
@@ -167,10 +174,28 @@ public class RabbitMQValidationService {
         List<com.vmware.cfspringsuper.config.VcapServicesConfig.ServiceCredentials> rabbitServices = 
             serviceCredentials.get("rabbitmq");
         if (rabbitServices != null && !rabbitServices.isEmpty()) {
-            String uri = rabbitServices.get(0).getManagementUri();
+            com.vmware.cfspringsuper.config.VcapServicesConfig.ServiceCredentials creds = rabbitServices.get(0);
+            String uri = creds.getManagementUri();
             if (uri != null && !uri.isEmpty()) {
-                return uri + "/api/queues";
+                // Ensure URI ends with /api/queues
+                String managementUri = uri;
+                if (!managementUri.endsWith("/")) {
+                    managementUri += "/";
+                }
+                if (!managementUri.endsWith("/api/queues")) {
+                    if (!managementUri.contains("/api/")) {
+                        managementUri += "api/queues";
+                    } else {
+                        managementUri += "queues";
+                    }
+                }
+                log.debug("Constructed Management API URI: {}", managementUri);
+                return managementUri;
+            } else {
+                log.debug("Management URI not found in VCAP_SERVICES for RabbitMQ service: {}", creds.getServiceName());
             }
+        } else {
+            log.debug("No RabbitMQ services found in VCAP_SERVICES");
         }
         return null;
     }
@@ -183,6 +208,7 @@ public class RabbitMQValidationService {
             // Get credentials from VCAP_SERVICES
             String username = "guest";
             String password = "guest";
+            String vhost = "/";
             List<com.vmware.cfspringsuper.config.VcapServicesConfig.ServiceCredentials> rabbitServices = 
                 serviceCredentials.get("rabbitmq");
             if (rabbitServices != null && !rabbitServices.isEmpty()) {
@@ -193,34 +219,81 @@ public class RabbitMQValidationService {
                 if (creds.getPassword() != null) {
                     password = creds.getPassword();
                 }
+                if (creds.getVirtualHost() != null && !creds.getVirtualHost().isEmpty()) {
+                    vhost = creds.getVirtualHost();
+                }
             }
+            
+            log.debug("Using credentials for Management API - username: {}, vhost: {}", username, vhost);
             
             String auth = username + ":" + password;
             String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes(StandardCharsets.UTF_8));
             
+            // Build URI with vhost if needed
+            String finalUri = managementUri;
+            // Encode vhost for URL (replace / with %2F)
+            String encodedVhost = vhost.replace("/", "%2F");
+            if (!vhost.equals("/") && !managementUri.contains("vhost=")) {
+                if (managementUri.contains("?")) {
+                    finalUri = managementUri + "&vhost=" + encodedVhost;
+                } else {
+                    finalUri = managementUri + "?vhost=" + encodedVhost;
+                }
+            }
+            
+            log.debug("Calling Management API: {}", finalUri);
+            
             HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(managementUri))
+                .uri(URI.create(finalUri))
                 .header("Authorization", "Basic " + encodedAuth)
+                .header("Accept", "application/json")
                 .GET()
                 .build();
             
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             
+            log.debug("Management API response status: {}", response.statusCode());
+            
             if (response.statusCode() == 200) {
-                ObjectMapper mapper = new ObjectMapper();
-                JsonNode queuesJson = mapper.readTree(response.body());
+                String responseBody = response.body();
+                log.debug("Management API response body length: {}", responseBody != null ? responseBody.length() : 0);
                 
-                for (JsonNode queue : queuesJson) {
-                    Map<String, Object> queueInfo = new HashMap<>();
-                    queueInfo.put("name", queue.get("name").asText());
-                    queueInfo.put("messages", queue.has("messages") ? queue.get("messages").asInt() : 0);
-                    queueInfo.put("consumers", queue.has("consumers") ? queue.get("consumers").asInt() : 0);
-                    queueInfo.put("vhost", queue.has("vhost") ? queue.get("vhost").asText() : "/");
-                    queues.add(queueInfo);
+                if (responseBody != null && !responseBody.trim().isEmpty()) {
+                    ObjectMapper mapper = new ObjectMapper();
+                    JsonNode queuesJson = mapper.readTree(responseBody);
+                    
+                    if (queuesJson.isArray()) {
+                        for (JsonNode queue : queuesJson) {
+                            if (queue.has("name")) {
+                                Map<String, Object> queueInfo = new HashMap<>();
+                                queueInfo.put("name", queue.get("name").asText());
+                                queueInfo.put("messages", queue.has("messages") ? queue.get("messages").asInt() : 0);
+                                queueInfo.put("consumers", queue.has("consumers") ? queue.get("consumers").asInt() : 0);
+                                queueInfo.put("vhost", queue.has("vhost") ? queue.get("vhost").asText() : vhost);
+                                queues.add(queueInfo);
+                            }
+                        }
+                        log.info("Parsed {} queues from Management API response", queues.size());
+                    } else {
+                        log.warn("Management API response is not an array: {}", responseBody);
+                    }
+                } else {
+                    log.warn("Management API returned empty response body");
                 }
+            } else if (response.statusCode() == 401) {
+                log.error("Management API authentication failed (401). Check credentials in VCAP_SERVICES.");
+            } else if (response.statusCode() == 403) {
+                log.error("Management API access forbidden (403). User may not have management plugin permissions.");
+            } else {
+                log.error("Management API returned error status: {}. Response: {}", response.statusCode(), 
+                    response.body() != null && response.body().length() < 500 ? response.body() : "[response too long]");
             }
+        } catch (java.net.ConnectException e) {
+            log.error("Failed to connect to Management API at {}: {}", managementUri, e.getMessage());
+        } catch (java.net.UnknownHostException e) {
+            log.error("Management API hostname cannot be resolved: {}", e.getMessage());
         } catch (Exception e) {
-            log.warn("Failed to list queues via Management API: {}", e.getMessage());
+            log.error("Failed to list queues via Management API: {}", e.getMessage(), e);
         }
         return queues;
     }
