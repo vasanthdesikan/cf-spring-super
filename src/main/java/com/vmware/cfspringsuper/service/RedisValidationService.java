@@ -1,12 +1,8 @@
 package com.vmware.cfspringsuper.service;
 
-import io.lettuce.core.RedisCommandExecutionException;
-import io.lettuce.core.RedisCommandInterruptedException;
-import io.lettuce.core.RedisCommandTimeoutException;
-import io.lettuce.core.RedisConnectionException;
-import io.lettuce.core.RedisException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
@@ -21,7 +17,7 @@ import java.util.Set;
 
 /**
  * Service for validating Redis/Valkey transactions
- * Implements proper exception handling based on Lettuce Redis Java client best practices
+ * Uses Spring Data Redis with Jedis client
  */
 @Slf4j
 @Service
@@ -73,35 +69,18 @@ public class RedisValidationService {
             }
 
             result.put("status", "success");
-        } catch (RedisConnectionException e) {
+        } catch (RedisConnectionFailureException e) {
             log.error("Redis connection error: {}", e.getMessage(), e);
             result.put("status", "error");
-            result.put("errorType", "RedisConnectionException");
+            result.put("errorType", "RedisConnectionFailureException");
             result.put("message", "Failed to connect to Redis: " + e.getMessage());
-            result.put("suggestion", "Check if Redis server is running, network connectivity, and configuration (host/port/password)");
-        } catch (RedisCommandTimeoutException e) {
-            log.error("Redis command timeout: {}", e.getMessage(), e);
+            result.put("suggestion", "Check if Redis server is running, network connectivity, and configuration (host/port/password/SSL)");
+        } catch (org.springframework.data.redis.RedisSystemException e) {
+            log.error("Redis system error: {}", e.getMessage(), e);
             result.put("status", "error");
-            result.put("errorType", "RedisCommandTimeoutException");
-            result.put("message", "Command timed out: " + e.getMessage());
-            result.put("suggestion", "Redis server may be overloaded or network latency is high. Consider increasing timeout or optimizing the command");
-        } catch (RedisCommandInterruptedException e) {
-            log.error("Redis command interrupted: {}", e.getMessage(), e);
-            result.put("status", "error");
-            result.put("errorType", "RedisCommandInterruptedException");
-            result.put("message", "Command was interrupted: " + e.getMessage());
-            result.put("suggestion", "Command execution was interrupted. This may occur during application shutdown or thread interruption");
-        } catch (RedisCommandExecutionException e) {
-            log.error("Redis command execution error: {}", e.getMessage(), e);
-            result.put("status", "error");
-            result.put("errorType", "RedisCommandExecutionException");
-            result.put("message", "Command execution failed: " + e.getMessage());
-            result.put("suggestion", "Check command syntax, data types, and Redis server error message for details");
-        } catch (RedisException e) {
-            log.error("Redis error: {}", e.getMessage(), e);
-            result.put("status", "error");
-            result.put("errorType", "RedisException");
-            result.put("message", "Redis operation failed: " + e.getMessage());
+            result.put("errorType", "RedisSystemException");
+            result.put("message", "Redis system error: " + e.getMessage());
+            result.put("suggestion", "Check Redis server logs and configuration");
         } catch (Exception e) {
             log.error("Unexpected error during Redis operation: {}", e.getMessage(), e);
             result.put("status", "error");
