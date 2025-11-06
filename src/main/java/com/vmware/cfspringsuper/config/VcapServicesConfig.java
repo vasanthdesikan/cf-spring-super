@@ -43,6 +43,8 @@ public class VcapServicesConfig {
                 if (services.isArray()) {
                     for (JsonNode service : services) {
                         ServiceCredentials creds = parseServiceCredentials(service);
+                        // Mark if this is a user-provided service
+                        creds.setUserProvided("user-provided".equals(serviceKey));
                         
                         // Determine service type based on name, label, or service key
                         String serviceType = determineServiceType(service, serviceKey, creds);
@@ -210,6 +212,7 @@ public class VcapServicesConfig {
         private Integer tlsPort;
         private Boolean serviceGatewayEnabled = false;
         private Integer serviceGatewayAccessPort;
+        private Boolean userProvided = false;
 
         // Getters and Setters
         public String getServiceName() { return serviceName; }
@@ -256,6 +259,9 @@ public class VcapServicesConfig {
 
         public Integer getServiceGatewayAccessPort() { return serviceGatewayAccessPort; }
         public void setServiceGatewayAccessPort(Integer serviceGatewayAccessPort) { this.serviceGatewayAccessPort = serviceGatewayAccessPort; }
+
+        public Boolean getUserProvided() { return userProvided; }
+        public void setUserProvided(Boolean userProvided) { this.userProvided = userProvided; }
     }
 }
 

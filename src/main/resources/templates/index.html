@@ -178,6 +178,11 @@
                     </div>
                 </div>
 
+                <div class="operation-section">
+                    <h5><i class="fas fa-table"></i> View All Data</h5>
+                    <button class="btn btn-info" onclick="validateMysql('listall')">View All Rows</button>
+                </div>
+
                 <div id="mysql-result"></div>
             </div>
 
@@ -235,6 +240,11 @@
                             <button class="btn btn-danger" onclick="validatePostgresql('delete')">Execute Delete</button>
                         </div>
                     </div>
+                </div>
+
+                <div class="operation-section">
+                    <h5><i class="fas fa-table"></i> View All Data</h5>
+                    <button class="btn btn-info" onclick="validatePostgresql('listall')">View All Rows</button>
                 </div>
 
                 <div id="postgresql-result"></div>
@@ -308,6 +318,18 @@
                     </div>
                 </div>
 
+                <div class="operation-section">
+                    <h5><i class="fas fa-table"></i> View All Key/Value Pairs</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="redis-listall-pattern" placeholder="Pattern (e.g., *)" value="*">
+                        </div>
+                        <div class="col-md-8">
+                            <button class="btn btn-info" onclick="validateRedis('listall')">View All Key/Value Pairs</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="redis-result"></div>
             </div>
 
@@ -355,6 +377,11 @@
                     </div>
                 </div>
 
+                <div class="operation-section">
+                    <h5><i class="fas fa-table"></i> List All Queues</h5>
+                    <button class="btn btn-info" onclick="validateRabbitMQ('listqueues')">List All Queues</button>
+                </div>
+
                 <div id="rabbitmq-result"></div>
             </div>
         </div>
@@ -374,6 +401,8 @@
                 data.value = document.getElementById('mysql-update-value').value;
             } else if (operation === 'delete') {
                 data.key = document.getElementById('mysql-delete-key').value;
+            } else if (operation === 'listall') {
+                // No data needed for listall
             }
 
             fetch(`/api/mysql/validate?operation=${operation}`, {
@@ -398,6 +427,8 @@
                 data.value = document.getElementById('postgresql-update-value').value;
             } else if (operation === 'delete') {
                 data.key = document.getElementById('postgresql-delete-key').value;
+            } else if (operation === 'listall') {
+                // No data needed for listall
             }
 
             fetch(`/api/postgresql/validate?operation=${operation}`, {
@@ -425,6 +456,8 @@
                 data.pattern = document.getElementById('redis-keys-pattern').value;
             } else if (operation === 'delete') {
                 data.key = document.getElementById('redis-delete-key').value;
+            } else if (operation === 'listall') {
+                data.pattern = document.getElementById('redis-listall-pattern').value;
             }
 
             fetch(`/api/redis/validate?operation=${operation}`, {
@@ -447,6 +480,8 @@
                 data.queue = document.getElementById('rabbitmq-receive-queue').value;
             } else if (operation === 'queue') {
                 data.queue = document.getElementById('rabbitmq-queue-name').value;
+            } else if (operation === 'listqueues') {
+                // No data needed for listqueues
             }
 
             fetch(`/api/rabbitmq/validate?operation=${operation}`, {
@@ -462,12 +497,77 @@
         function displayResult(elementId, result) {
             const element = document.getElementById(elementId);
             const statusClass = result.status === 'success' ? 'success' : 'error';
-            element.innerHTML = `
-                <div class="result-box ${statusClass}">
-                    <h6>Result:</h6>
-                    <pre>${JSON.stringify(result, null, 2)}</pre>
-                </div>
-            `;
+            
+            // Check if result contains table data
+            let html = `<div class="result-box ${statusClass}"><h6>Result:</h6>`;
+            
+            if (result.rows && Array.isArray(result.rows)) {
+                // MySQL/PostgreSQL table data
+                html += `<table class="table table-striped table-bordered mt-3">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Key Name</th>
+                            <th>Value</th>
+                            <th>Created At</th>
+                            <th>Updated At</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+                result.rows.forEach(row => {
+                    html += `<tr>
+                        <td>${row.id || ''}</td>
+                        <td>${row.key_name || ''}</td>
+                        <td>${row.value || ''}</td>
+                        <td>${row.created_at || ''}</td>
+                        <td>${row.updated_at || ''}</td>
+                    </tr>`;
+                });
+                html += `</tbody></table><p class="mt-2"><strong>Total rows: ${result.count || 0}</strong></p>`;
+            } else if (result.queues && Array.isArray(result.queues)) {
+                // RabbitMQ queues
+                html += `<table class="table table-striped table-bordered mt-3">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Queue Name</th>
+                            <th>Exists</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+                result.queues.forEach(queue => {
+                    html += `<tr>
+                        <td>${queue.name || ''}</td>
+                        <td>${queue.exists ? 'Yes' : 'No'}</td>
+                    </tr>`;
+                });
+                html += `</tbody></table><p class="mt-2"><strong>Total queues: ${result.count || 0}</strong></p>`;
+                if (result.note) {
+                    html += `<p class="text-muted"><small>${result.note}</small></p>`;
+                }
+            } else if (result.keyValuePairs && Array.isArray(result.keyValuePairs)) {
+                // Redis key/value pairs
+                html += `<table class="table table-striped table-bordered mt-3">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Key</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+                result.keyValuePairs.forEach(pair => {
+                    html += `<tr>
+                        <td>${pair.key || ''}</td>
+                        <td>${pair.value || ''}</td>
+                    </tr>`;
+                });
+                html += `</tbody></table><p class="mt-2"><strong>Total pairs: ${result.count || 0}</strong></p>`;
+            } else {
+                // Default JSON display
+                html += `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+            }
+            
+            html += `</div>`;
+            element.innerHTML = html;
         }
 
         function displayError(elementId, error) {

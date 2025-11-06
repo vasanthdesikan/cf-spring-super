@@ -45,18 +45,27 @@ public class RedisConfig {
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
         config.setHostName(creds.getHost());
         
-        // Priority: service_gateway_access_port (if enabled) > TLS port > regular port
+        // For user-provided services: use service_gateway_access_port if available, otherwise use port
+        // For standard services: use TLS port if enabled, otherwise use regular port
         int port = 6379;
-        if (creds.getServiceGatewayEnabled() != null && creds.getServiceGatewayEnabled() 
-                && creds.getServiceGatewayAccessPort() != null) {
-            port = creds.getServiceGatewayAccessPort();
-            log.info("Using service gateway access port: {}", port);
-        } else if (creds.getTlsEnabled() != null && creds.getTlsEnabled() && creds.getTlsPort() != null) {
-            port = creds.getTlsPort();
-            log.info("Using TLS port: {}", port);
-        } else if (creds.getPort() != null) {
-            port = creds.getPort();
-            log.info("Using regular port: {}", port);
+        if (creds.getUserProvided() != null && creds.getUserProvided()) {
+            // User-provided service: prefer service_gateway_access_port
+            if (creds.getServiceGatewayAccessPort() != null) {
+                port = creds.getServiceGatewayAccessPort();
+                log.info("Using service gateway access port (user-provided): {}", port);
+            } else if (creds.getPort() != null) {
+                port = creds.getPort();
+                log.info("Using port (user-provided): {}", port);
+            }
+        } else {
+            // Standard service: prefer TLS port if enabled, otherwise regular port
+            if (creds.getTlsEnabled() != null && creds.getTlsEnabled() && creds.getTlsPort() != null) {
+                port = creds.getTlsPort();
+                log.info("Using TLS port: {}", port);
+            } else if (creds.getPort() != null) {
+                port = creds.getPort();
+                log.info("Using regular port: {}", port);
+            }
         }
         config.setPort(port);
         

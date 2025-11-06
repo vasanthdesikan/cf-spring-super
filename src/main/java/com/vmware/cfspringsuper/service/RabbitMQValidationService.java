@@ -10,7 +10,9 @@ import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -51,6 +53,9 @@ public class RabbitMQValidationService {
                     break;
                 case "queue":
                     result.putAll(performQueueInfo(data));
+                    break;
+                case "listqueues":
+                    result.putAll(performListQueues());
                     break;
                 default:
                     result.put("status", "error");
@@ -118,6 +123,49 @@ public class RabbitMQValidationService {
         result.put("queue", queue);
         result.put("declared", true);
         result.put("note", "Queue information retrieval requires management API");
+        return result;
+    }
+
+    private Map<String, Object> performListQueues() {
+        List<Map<String, Object>> queues = new ArrayList<>();
+        
+        try {
+            // Try to get queue information using RabbitMQ management API pattern
+            // Since we may not have management API access, we'll use a workaround:
+            // Try to declare and get info for common queues
+            List<String> commonQueues = List.of("validation_test_queue", "amq.gen", "amq.default");
+            
+            for (String queueName : commonQueues) {
+                try {
+                    Map<String, Object> queueInfo = rabbitTemplate.execute(channel -> {
+                        try {
+                            channel.queueDeclarePassive(queueName);
+                            // Queue exists
+                            Map<String, Object> info = new HashMap<>();
+                            info.put("name", queueName);
+                            info.put("exists", true);
+                            return info;
+                        } catch (Exception e) {
+                            // Queue doesn't exist or we can't access it
+                            return null;
+                        }
+                    });
+                    
+                    if (queueInfo != null) {
+                        queues.add(new HashMap<>(queueInfo));
+                    }
+                } catch (Exception e) {
+                    // Ignore errors for individual queues
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Error listing queues: {}", e.getMessage());
+        }
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("queues", queues);
+        result.put("count", queues.size());
+        result.put("note", "Full queue listing requires RabbitMQ Management API");
         return result;
     }
 }

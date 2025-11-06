@@ -8,7 +8,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -54,6 +56,9 @@ public class RedisValidationService {
                     break;
                 case "keys":
                     result.putAll(performKeys(data));
+                    break;
+                case "listall":
+                    result.putAll(performListAll(data));
                     break;
                 default:
                     result.put("status", "error");
@@ -133,6 +138,31 @@ public class RedisValidationService {
         result.put("pattern", pattern);
         result.put("count", keys != null ? keys.size() : 0);
         result.put("keys", keys);
+        return result;
+    }
+
+    private Map<String, Object> performListAll(Map<String, Object> data) {
+        String pattern = (String) data.getOrDefault("pattern", "*");
+        Set<String> keys = redisTemplate.keys(pattern);
+        
+        List<Map<String, Object>> keyValuePairs = new ArrayList<>();
+        if (keys != null) {
+            for (String key : keys) {
+                try {
+                    Object value = redisTemplate.opsForValue().get(key);
+                    Map<String, Object> pair = new HashMap<>();
+                    pair.put("key", key);
+                    pair.put("value", value != null ? value.toString() : null);
+                    keyValuePairs.add(pair);
+                } catch (Exception e) {
+                    log.warn("Error getting value for key {}: {}", key, e.getMessage());
+                }
+            }
+        }
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("keyValuePairs", keyValuePairs);
+        result.put("count", keyValuePairs.size());
         return result;
     }
 }

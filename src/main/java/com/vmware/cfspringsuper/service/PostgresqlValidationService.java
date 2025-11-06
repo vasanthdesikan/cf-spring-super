@@ -12,7 +12,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -55,6 +57,9 @@ public class PostgresqlValidationService {
                     break;
                 case "delete":
                     result.putAll(performDelete(conn, data));
+                    break;
+                case "listall":
+                    result.putAll(performListAll(conn));
                     break;
                 default:
                     result.put("status", "error");
@@ -151,6 +156,30 @@ public class PostgresqlValidationService {
             
             Map<String, Object> result = new HashMap<>();
             result.put("rowsAffected", rowsAffected);
+            return result;
+        }
+    }
+
+    private Map<String, Object> performListAll(Connection conn) throws Exception {
+        String sql = "SELECT id, key_name, value, created_at, updated_at FROM validation_test ORDER BY id";
+        
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            
+            List<Map<String, Object>> rows = new ArrayList<>();
+            while (rs.next()) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("id", rs.getInt("id"));
+                row.put("key_name", rs.getString("key_name"));
+                row.put("value", rs.getString("value"));
+                row.put("created_at", rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toString() : null);
+                row.put("updated_at", rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toString() : null);
+                rows.add(row);
+            }
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("rows", rows);
+            result.put("count", rows.size());
             return result;
         }
     }
