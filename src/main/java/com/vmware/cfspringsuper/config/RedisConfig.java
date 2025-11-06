@@ -46,7 +46,11 @@ public class RedisConfig {
         
         // Resolve hostname to IP if needed
         String host = creds.getHost();
-        if (host != null && host.contains("<unresolved>")) {
+        if (host == null || host.isEmpty()) {
+            log.error("Redis host is null or empty");
+            return null;
+        }
+        if (host.contains("<unresolved>")) {
             log.error("Redis hostname contains <unresolved>: {}", host);
             return null;
         }
@@ -82,9 +86,8 @@ public class RedisConfig {
 
         LettuceConnectionFactory factory = new LettuceConnectionFactory(config);
         
-        // Configure DNS resolution timeout
+        // Configure connection settings
         factory.setValidateConnection(true);
-        factory.setShutdownTimeout(java.time.Duration.ofSeconds(2));
         
         // Note: TLS configuration would need additional setup for Lettuce
         // For now, we'll use the TLS port but full TLS setup may require additional configuration

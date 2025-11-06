@@ -1,10 +1,7 @@
 package com.vmware.cfspringsuper.service;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.core.Message;
-import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
@@ -183,19 +180,18 @@ public class RabbitMQValidationService {
         try {
             HttpClient client = HttpClient.newHttpClient();
             
-            // Get credentials from connection factory
+            // Get credentials from VCAP_SERVICES
             String username = "guest";
             String password = "guest";
-            if (rabbitTemplate != null && rabbitTemplate.getConnectionFactory() != null) {
-                try {
-                    org.springframework.amqp.rabbit.connection.Connection connection = 
-                        rabbitTemplate.getConnectionFactory().createConnection();
-                    if (connection != null) {
-                        username = connection.getDelegate().getUsername();
-                        password = new String(connection.getDelegate().getPassword());
-                    }
-                } catch (Exception e) {
-                    log.debug("Could not extract credentials: {}", e.getMessage());
+            List<com.vmware.cfspringsuper.config.VcapServicesConfig.ServiceCredentials> rabbitServices = 
+                serviceCredentials.get("rabbitmq");
+            if (rabbitServices != null && !rabbitServices.isEmpty()) {
+                com.vmware.cfspringsuper.config.VcapServicesConfig.ServiceCredentials creds = rabbitServices.get(0);
+                if (creds.getUsername() != null) {
+                    username = creds.getUsername();
+                }
+                if (creds.getPassword() != null) {
+                    password = creds.getPassword();
                 }
             }
             
