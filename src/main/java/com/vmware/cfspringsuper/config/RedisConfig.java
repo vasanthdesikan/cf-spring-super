@@ -12,6 +12,7 @@ import org.springframework.data.redis.connection.jedis.JedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.lang.Nullable;
+import redis.clients.jedis.JedisPoolConfig;
 
 import java.time.Duration;
 import java.util.List;
@@ -76,6 +77,14 @@ public class RedisConfig {
             log.debug("No Redis password provided - connecting without authentication");
         }
 
+        // Configure Jedis pool settings
+        JedisPoolConfig poolConfig = new JedisPoolConfig();
+        poolConfig.setMaxTotal(10);
+        poolConfig.setMaxIdle(5);
+        poolConfig.setMinIdle(2);
+        poolConfig.setTestOnBorrow(true);
+        poolConfig.setTestOnReturn(true);
+        
         // Build Jedis client configuration
         JedisClientConfiguration.JedisClientConfigurationBuilder clientConfigBuilder = 
                 JedisClientConfiguration.builder()
@@ -90,8 +99,9 @@ public class RedisConfig {
         
         JedisClientConfiguration clientConfig = clientConfigBuilder.build();
         
-        // Create Jedis connection factory with config and client configuration
+        // Create Jedis connection factory
         JedisConnectionFactory factory = new JedisConnectionFactory(config, clientConfig);
+        factory.setPoolConfig(poolConfig);
         factory.afterPropertiesSet();
         
         log.info("Redis/Valkey connection factory configured for {}:{} (SSL: {})", host, port, useSsl);
