@@ -1,5 +1,8 @@
 package com.vmware.cfspringsuper.config;
 
+import io.lettuce.core.ClientOptions;
+import io.lettuce.core.SocketOptions;
+import io.lettuce.core.TimeoutOptions;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -7,21 +10,20 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
-import org.springframework.data.redis.connection.jedis.JedisClientConfiguration;
-import org.springframework.data.redis.connection.jedis.JedisConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.lang.Nullable;
-import redis.clients.jedis.JedisPoolConfig;
 
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Configuration for Redis/Valkey connection using Jedis
- * Simple and robust implementation that works for both standard and user-provided services
- * Prefers non-TLS connections first, then falls back to TLS if needed
+ * Configuration for Redis/Valkey connection using Lettuce
+ * Handles both standard and user-provided services
+ * Uses TLS with insecure option (trust all certificates)
  */
 @Slf4j
 @Configuration
@@ -57,12 +59,12 @@ public class RedisConfig {
         }
         log.info("Using Redis host: {}", host);
 
-        // Determine port - prefer non-TLS first
+        // Determine port and whether to use TLS
         PortInfo portInfo = determinePort(creds, isUserProvided);
         int port = portInfo.port;
-        boolean useSsl = portInfo.useSsl;
+        boolean useTls = portInfo.useTls;
         
-        log.info("Using Redis port: {} (SSL: {})", port, useSsl);
+        log.info("Using Redis port: {} (TLS: {})", port, useTls);
 
         // Create Redis configuration
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
@@ -77,35 +79,56 @@ public class RedisConfig {
             log.debug("No Redis password provided - connecting without authentication");
         }
 
-        // Configure Jedis pool settings
-        JedisPoolConfig poolConfig = new JedisPoolConfig();
-        poolConfig.setMaxTotal(10);
-        poolConfig.setMaxIdle(5);
-        poolConfig.setMinIdle(2);
-        poolConfig.setTestOnBorrow(true);
-        poolConfig.setTestOnReturn(true);
-        
-        // Build Jedis client configuration
-        JedisClientConfiguration.JedisClientConfigurationBuilder clientConfigBuilder = 
-                JedisClientConfiguration.builder()
-                .connectTimeout(Duration.ofSeconds(10))
-                .readTimeout(Duration.ofSeconds(10));
-        
-        // Enable SSL if needed
-        if (useSsl) {
-            clientConfigBuilder.useSsl();
-            log.info("SSL/TLS enabled for Redis connection");
-        }
-        
-        JedisClientConfiguration clientConfig = clientConfigBuilder.build();
-        
-        // Create Jedis connection factory
-        JedisConnectionFactory factory = new JedisConnectionFactory(config, clientConfig);
-        factory.setPoolConfig(poolConfig);
+        // Build Lettuce client configuration with TLS (insecure)
+        LettuceClientConfiguration clientConfig = buildLettuceClientConfiguration(useTls);
+
+        // Create connection factory
+        LettuceConnectionFactory factory = new LettuceConnectionFactory(config, clientConfig);
+        factory.setValidateConnection(true);
         factory.afterPropertiesSet();
         
-        log.info("Redis/Valkey connection factory configured for {}:{} (SSL: {})", host, port, useSsl);
+        log.info("Redis/Valkey connection factory configured for {}:{} (TLS: {})", host, port, useTls);
         return factory;
+    }
+
+    /**
+     * Build Lettuce client configuration with TLS (insecure - trust all certificates)
+     */
+    private LettuceClientConfiguration buildLettuceClientConfiguration(boolean useTls) {
+        // Configure socket options
+        SocketOptions socketOptions = SocketOptions.builder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
+
+        // Configure timeout options
+        TimeoutOptions timeoutOptions = TimeoutOptions.builder()
+                .fixedTimeout(Duration.ofSeconds(30))
+                .build();
+
+        // Build client options
+        ClientOptions clientOptions = ClientOptions.builder()
+                .socketOptions(socketOptions)
+                .timeoutOptions(timeoutOptions)
+                .autoReconnect(true)
+                .build();
+
+        // Build Lettuce client configuration
+        LettuceClientConfiguration.LettuceClientConfigurationBuilder builder = 
+                LettuceClientConfiguration.builder()
+                .clientOptions(clientOptions)
+                .commandTimeout(Duration.ofSeconds(30));
+
+        // Configure TLS with insecure option (trust all certificates)
+        if (useTls) {
+            // Enable SSL and disable peer verification (insecure - trust all certificates)
+            builder.useSsl()
+                .disablePeerVerification()
+                .and();
+            
+            log.info("TLS enabled with insecure option (peer verification disabled)");
+        }
+        
+        return builder.build();
     }
 
     /**
@@ -128,15 +151,15 @@ public class RedisConfig {
     }
 
     /**
-     * Port information including whether SSL should be used
+     * Port information including whether TLS should be used
      */
     private static class PortInfo {
         int port;
-        boolean useSsl;
+        boolean useTls;
         
-        PortInfo(int port, boolean useSsl) {
+        PortInfo(int port, boolean useTls) {
             this.port = port;
-            this.useSsl = useSsl;
+            this.useTls = useTls;
         }
     }
     
@@ -144,11 +167,11 @@ public class RedisConfig {
      * Determine port - prefer non-TLS first, then TLS
      * For user-provided services: try service_gateway_access_port or port (non-TLS), then TLS
      * For standard services: try port (non-TLS), then tls_port
-     * Returns port and whether SSL should be enabled
+     * Returns port and whether TLS should be enabled
      */
     private PortInfo determinePort(VcapServicesConfig.ServiceCredentials creds, boolean isUserProvided) {
         int defaultPort = 6379;
-        boolean defaultUseSsl = false;
+        boolean defaultUseTls = false;
         
         if (isUserProvided) {
             // User-provided service: prefer non-TLS ports first
@@ -163,7 +186,7 @@ public class RedisConfig {
             }
             // Fallback to TLS port if non-TLS not available
             if (creds.getTlsPort() != null) {
-                log.debug("User-provided service: falling back to TLS port: {} (SSL required)", creds.getTlsPort());
+                log.debug("User-provided service: falling back to TLS port: {} (TLS required)", creds.getTlsPort());
                 return new PortInfo(creds.getTlsPort(), true);
             }
         } else {
@@ -174,18 +197,18 @@ public class RedisConfig {
             }
             // Fallback to TLS port if non-TLS not available
             if (creds.getTlsPort() != null) {
-                log.debug("Standard service: falling back to TLS port: {} (SSL required)", creds.getTlsPort());
+                log.debug("Standard service: falling back to TLS port: {} (TLS required)", creds.getTlsPort());
                 return new PortInfo(creds.getTlsPort(), true);
             }
             // Check if TLS is explicitly enabled (even if we have a regular port)
             if (creds.getTlsEnabled() != null && creds.getTlsEnabled() && creds.getPort() != null) {
-                log.debug("Standard service: TLS explicitly enabled, using port: {} (SSL required)", creds.getPort());
+                log.debug("Standard service: TLS explicitly enabled, using port: {} (TLS required)", creds.getPort());
                 return new PortInfo(creds.getPort(), true);
             }
         }
         
         log.warn("No port found in credentials, using default: {} (non-TLS)", defaultPort);
-        return new PortInfo(defaultPort, defaultUseSsl);
+        return new PortInfo(defaultPort, defaultUseTls);
     }
 
     @Bean

@@ -17,7 +17,8 @@ import java.util.Set;
 
 /**
  * Service for validating Redis/Valkey transactions
- * Uses Spring Data Redis with Jedis client
+ * Uses Spring Data Redis with Lettuce client
+ * Displays all keys and values in Redis
  */
 @Slf4j
 @Service
@@ -74,7 +75,7 @@ public class RedisValidationService {
             result.put("status", "error");
             result.put("errorType", "RedisConnectionFailureException");
             result.put("message", "Failed to connect to Redis: " + e.getMessage());
-            result.put("suggestion", "Check if Redis server is running, network connectivity, and configuration (host/port/password/SSL)");
+            result.put("suggestion", "Check if Redis server is running, network connectivity, and configuration (host/port/password/TLS)");
         } catch (org.springframework.data.redis.RedisSystemException e) {
             log.error("Redis system error: {}", e.getMessage(), e);
             result.put("status", "error");
@@ -95,13 +96,13 @@ public class RedisValidationService {
         String key = (String) data.getOrDefault("key", "test");
         
         try {
-            String value = (String) redisTemplate.opsForValue().get(key);
+            Object value = redisTemplate.opsForValue().get(key);
             
             Map<String, Object> result = new HashMap<>();
             if (value != null) {
                 result.put("found", true);
                 result.put("key", key);
-                result.put("value", value);
+                result.put("value", value.toString());
             } else {
                 result.put("found", false);
                 result.put("key", key);
@@ -208,6 +209,10 @@ public class RedisValidationService {
         }
     }
 
+    /**
+     * List all keys and their values in Redis
+     * This method retrieves all keys and displays their values
+     */
     private Map<String, Object> performListAll(Map<String, Object> data) {
         String pattern = (String) data.getOrDefault("pattern", "*");
         
@@ -217,7 +222,9 @@ public class RedisValidationService {
             List<Map<String, Object>> keyValuePairs = new ArrayList<>();
             if (keys != null) {
                 int processed = 0;
-                int maxKeys = 1000; // Limit to prevent memory issues
+                int maxKeys = 10000; // Increased limit to show more keys
+                
+                log.info("Retrieving values for {} keys", keys.size());
                 
                 for (String key : keys) {
                     if (processed >= maxKeys) {
@@ -226,15 +233,29 @@ public class RedisValidationService {
                     }
                     
                     try {
+                        // Get value - try as string first, then as object
                         Object value = redisTemplate.opsForValue().get(key);
+                        String valueStr = null;
+                        
+                        if (value != null) {
+                            valueStr = value.toString();
+                        }
+                        
                         Map<String, Object> pair = new HashMap<>();
                         pair.put("key", key);
-                        pair.put("value", value != null ? value.toString() : null);
+                        pair.put("value", valueStr);
+                        pair.put("type", value != null ? value.getClass().getSimpleName() : "null");
                         keyValuePairs.add(pair);
                         processed++;
                     } catch (Exception e) {
                         log.warn("Error getting value for key {}: {}", key, e.getMessage());
-                        // Continue with next key
+                        // Add key with error message
+                        Map<String, Object> pair = new HashMap<>();
+                        pair.put("key", key);
+                        pair.put("value", null);
+                        pair.put("error", e.getMessage());
+                        keyValuePairs.add(pair);
+                        processed++;
                     }
                 }
                 
@@ -248,6 +269,7 @@ public class RedisValidationService {
             result.put("count", keyValuePairs.size());
             result.put("pattern", pattern);
             
+            log.info("Successfully retrieved {} key-value pairs", keyValuePairs.size());
             return result;
         } catch (Exception e) {
             log.error("Error performing LISTALL operation with pattern {}: {}", pattern, e.getMessage());
