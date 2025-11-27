@@ -15,8 +15,7 @@ import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfigurat
 }, excludeName = {
     "org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration",
     "org.springframework.boot.actuate.autoconfigure.data.redis.RedisHealthContributorAutoConfiguration",
-    "org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration",
-    "org.springframework.data.redis.repository.configuration.RedisRepositoryConfigurationExtension"
+    "org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration"
 })
 public class CfSpringSuperApplication {
 
