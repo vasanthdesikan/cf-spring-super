@@ -32,17 +32,29 @@ public class RedisConfig {
     @Autowired
     private Map<String, List<VcapServicesConfig.ServiceCredentials>> serviceCredentials;
 
-    @Bean
-    public RedisConnectionFactory redisConnectionFactory() {
-        // Find Redis or Valkey service
+    /**
+     * Check if Redis/Valkey service is available
+     */
+    private boolean isRedisAvailable() {
         List<VcapServicesConfig.ServiceCredentials> redisServices = serviceCredentials.get("valkey");
         if (redisServices == null || redisServices.isEmpty()) {
             redisServices = serviceCredentials.get("redis");
         }
-        
-        if (redisServices == null || redisServices.isEmpty()) {
-            log.warn("No Redis/Valkey service found in VCAP_SERVICES");
+        return redisServices != null && !redisServices.isEmpty();
+    }
+
+    @Bean
+    public RedisConnectionFactory redisConnectionFactory() {
+        // Check if Redis is available first
+        if (!isRedisAvailable()) {
+            log.warn("No Redis/Valkey service found in VCAP_SERVICES - RedisConnectionFactory will not be created");
             return null;
+        }
+        
+        // Find Redis or Valkey service
+        List<VcapServicesConfig.ServiceCredentials> redisServices = serviceCredentials.get("valkey");
+        if (redisServices == null || redisServices.isEmpty()) {
+            redisServices = serviceCredentials.get("redis");
         }
 
         VcapServicesConfig.ServiceCredentials creds = redisServices.get(0);

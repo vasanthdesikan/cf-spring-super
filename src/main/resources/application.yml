@@ -62,6 +62,8 @@ management:
   health:
     rabbit:
       enabled: false  # Disable RabbitMQ health check to prevent crashes when RMQ is unavailable
+    redis:
+      enabled: false  # Disable Redis health check to prevent crashes when Redis is unavailable
 
 # Logging
 logging:

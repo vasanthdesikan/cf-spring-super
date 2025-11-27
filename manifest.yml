@@ -1,7 +1,7 @@
 ---
 applications:
   - name: cf-spring-super
-    memory: 512M
+    memory: 1G
     instances: 1
     path: target/cf-spring-super-1.0.0.jar
     env:
