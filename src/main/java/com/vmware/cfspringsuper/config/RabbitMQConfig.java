@@ -8,6 +8,7 @@ import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.lang.Nullable;
 
@@ -17,9 +18,11 @@ import java.util.Map;
 
 /**
  * Configuration for RabbitMQ connection
+ * This configuration is only active when RabbitMQ services are available
  */
 @Slf4j
 @Configuration
+@Conditional(RabbitMQAvailableCondition.class)
 public class RabbitMQConfig {
 
     @Autowired
@@ -30,7 +33,7 @@ public class RabbitMQConfig {
         List<VcapServicesConfig.ServiceCredentials> rabbitServices = serviceCredentials.get("rabbitmq");
         
         if (rabbitServices == null || rabbitServices.isEmpty()) {
-            log.warn("No RabbitMQ service found in VCAP_SERVICES");
+            log.debug("No RabbitMQ service found in VCAP_SERVICES - RabbitMQConnectionFactory will not be created");
             return null;
         }
 

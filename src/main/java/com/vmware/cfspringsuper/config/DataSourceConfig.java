@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
@@ -15,9 +16,11 @@ import java.util.Map;
  * Configuration for data sources (MySQL and PostgreSQL)
  * Handles multiple service instances and selects the first available
  * Creates beans only when services are available
+ * This configuration is only active when database services are present
  */
 @Slf4j
 @Configuration
+@Conditional(DatabaseAvailableCondition.class)
 public class DataSourceConfig {
 
     @Autowired
