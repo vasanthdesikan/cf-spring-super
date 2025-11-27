@@ -2,6 +2,7 @@ package com.vmware.cfspringsuper.config;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
@@ -27,7 +28,6 @@ public class DataSourceConfig {
     private Map<String, List<VcapServicesConfig.ServiceCredentials>> serviceCredentials;
 
     @Bean(name = "mysqlDataSource")
-    @Primary
     public DataSource mysqlDataSource() {
         List<VcapServicesConfig.ServiceCredentials> mysqlServices = serviceCredentials.get("mysql");
         
@@ -85,6 +85,30 @@ public class DataSourceConfig {
                 .password(creds.getPassword())
                 .driverClassName("org.postgresql.Driver")
                 .build();
+    }
+
+    /**
+     * Primary DataSource bean for JdbcTemplate auto-configuration
+     * Uses MySQL if available, otherwise PostgreSQL
+     * Only created when at least one database service is available
+     */
+    @Bean(name = "dataSource")
+    @Primary
+    public DataSource dataSource(
+            @org.springframework.beans.factory.annotation.Qualifier("mysqlDataSource") 
+            @org.springframework.lang.Nullable DataSource mysqlDataSource,
+            @org.springframework.beans.factory.annotation.Qualifier("postgresDataSource") 
+            @org.springframework.lang.Nullable DataSource postgresDataSource) {
+        // Prefer MySQL if available
+        if (mysqlDataSource != null) {
+            return mysqlDataSource;
+        }
+        // Fall back to PostgreSQL
+        if (postgresDataSource != null) {
+            return postgresDataSource;
+        }
+        // No database available - return null (JdbcTemplate won't be created if dataSource is null)
+        return null;
     }
 
     private String buildJdbcUrl(String dbType, VcapServicesConfig.ServiceCredentials creds) {
