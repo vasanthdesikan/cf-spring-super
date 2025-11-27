@@ -29,11 +29,15 @@ public class DataSourceConfig {
         List<VcapServicesConfig.ServiceCredentials> mysqlServices = serviceCredentials.get("mysql");
         
         if (mysqlServices == null || mysqlServices.isEmpty()) {
-            log.warn("No MySQL service found in VCAP_SERVICES - MySQL datasource will not be created");
+            log.debug("No MySQL service found in VCAP_SERVICES - MySQL datasource will not be created");
             return null;
         }
 
         VcapServicesConfig.ServiceCredentials creds = mysqlServices.get(0);
+        if (creds == null || creds.getServiceName() == null) {
+            log.warn("MySQL service credentials are invalid - MySQL datasource will not be created");
+            return null;
+        }
         log.info("Configuring MySQL datasource for service: {}", creds.getServiceName());
 
         // Prefer jdbcUrl if available, otherwise build from components
@@ -55,11 +59,15 @@ public class DataSourceConfig {
         List<VcapServicesConfig.ServiceCredentials> postgresServices = serviceCredentials.get("postgresql");
         
         if (postgresServices == null || postgresServices.isEmpty()) {
-            log.warn("No PostgreSQL service found in VCAP_SERVICES - PostgreSQL datasource will not be created");
+            log.debug("No PostgreSQL service found in VCAP_SERVICES - PostgreSQL datasource will not be created");
             return null;
         }
 
         VcapServicesConfig.ServiceCredentials creds = postgresServices.get(0);
+        if (creds == null || creds.getServiceName() == null) {
+            log.warn("PostgreSQL service credentials are invalid - PostgreSQL datasource will not be created");
+            return null;
+        }
         log.info("Configuring PostgreSQL datasource for service: {}", creds.getServiceName());
 
         // Prefer jdbcUrl if available, otherwise build from components

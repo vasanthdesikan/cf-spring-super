@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
@@ -24,9 +25,11 @@ import java.util.Map;
  * Configuration for Redis/Valkey connection using Lettuce
  * Handles both standard and user-provided services
  * Uses TLS with insecure option (trust all certificates)
+ * This configuration is only active when Redis services are available
  */
 @Slf4j
 @Configuration
+@Conditional(RedisAvailableCondition.class)
 public class RedisConfig {
 
     @Autowired
@@ -47,7 +50,7 @@ public class RedisConfig {
     public RedisConnectionFactory redisConnectionFactory() {
         // Check if Redis is available first
         if (!isRedisAvailable()) {
-            log.warn("No Redis/Valkey service found in VCAP_SERVICES - RedisConnectionFactory will not be created");
+            log.debug("No Redis/Valkey service found in VCAP_SERVICES - RedisConnectionFactory will not be created");
             return null;
         }
         
@@ -55,6 +58,11 @@ public class RedisConfig {
         List<VcapServicesConfig.ServiceCredentials> redisServices = serviceCredentials.get("valkey");
         if (redisServices == null || redisServices.isEmpty()) {
             redisServices = serviceCredentials.get("redis");
+        }
+        
+        if (redisServices == null || redisServices.isEmpty()) {
+            log.debug("Redis services list is empty - RedisConnectionFactory will not be created");
+            return null;
         }
 
         VcapServicesConfig.ServiceCredentials creds = redisServices.get(0);

@@ -22,6 +22,8 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       ssl: ${REDIS_SSL:false}
+      repositories:
+        enabled: false  # Disable Redis repositories to prevent crashes when Redis is unavailable
   
   # RabbitMQ configuration
   rabbitmq:

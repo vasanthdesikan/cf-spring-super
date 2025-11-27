@@ -9,10 +9,10 @@ applications:
       SPRING_PROFILES_ACTIVE: cloud
       JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 17.+ } }'
       JAVA_VERSION: 17
-    services:
-      # Uncomment and configure based on your service instances
-      # - mysql-service
-      # - postgresql-service
-      # - redis-service
-      # - rabbitmq-service
+    # Services are optional - uncomment and add service instance names when needed
+    # services:
+    #   - mysql-service
+    #   - postgresql-service
+    #   - redis-service
+    #   - rabbitmq-service
 

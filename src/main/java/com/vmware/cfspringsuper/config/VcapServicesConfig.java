@@ -61,45 +61,78 @@ public class VcapServicesConfig {
     }
 
     private String determineServiceType(JsonNode service, String serviceKey, ServiceCredentials creds) {
-        // Check service name first
+        // Check service name first - use word boundaries to avoid false positives
         if (service.has("name")) {
             String name = service.get("name").asText().toLowerCase();
-            if (name.contains("mysql")) return "mysql";
-            if (name.contains("postgres")) return "postgresql";
-            if (name.contains("valkey") || name.contains("redis")) return "valkey";
-            if (name.contains("rabbit")) return "rabbitmq";
-        }
-        
-        // Check label
-        if (service.has("label")) {
-            String label = service.get("label").asText().toLowerCase();
-            if (label.contains("mysql")) return "mysql";
-            if (label.contains("postgres")) return "postgresql";
-            if (label.contains("valkey") || label.contains("redis")) return "valkey";
-            if (label.contains("rabbit")) return "rabbitmq";
-        }
-        
-        // Check service key (for standard services)
-        String keyLower = serviceKey.toLowerCase();
-        if (keyLower.contains("mysql")) return "mysql";
-        if (keyLower.contains("postgres")) return "postgresql";
-        if (keyLower.contains("valkey") || keyLower.contains("redis")) return "valkey";
-        if (keyLower.contains("rabbit")) return "rabbitmq";
-        
-        // For user-provided services, check credentials structure
-        if ("user-provided".equals(serviceKey)) {
-            // Check if it has jdbcUrl (database)
-            if (creds.getJdbcUrl() != null) {
-                if (creds.getJdbcUrl().contains("mysql")) return "mysql";
-                if (creds.getJdbcUrl().contains("postgresql")) return "postgresql";
+            // Use more precise matching - exact match, starts with, ends with, or contains as whole word
+            if (name.equals("mysql") || name.startsWith("mysql-") || name.endsWith("-mysql") || 
+                name.matches(".*[^a-z]mysql[^a-z].*") || name.matches(".*[^a-z]mysql$") || name.matches("^mysql[^a-z].*")) {
+                return "mysql";
             }
-            // Check if it has host/port but no database (could be redis/valkey)
-            if (creds.getHost() != null && creds.getPort() != null && creds.getDatabase() == null) {
+            if (name.equals("postgresql") || name.equals("postgres") ||
+                name.startsWith("postgresql-") || name.startsWith("postgres-") ||
+                name.endsWith("-postgresql") || name.endsWith("-postgres") ||
+                name.matches(".*[^a-z]postgres[^a-z].*") || name.matches(".*[^a-z]postgresql[^a-z].*")) {
+                return "postgresql";
+            }
+            if (name.equals("valkey") || name.equals("redis") ||
+                name.startsWith("valkey-") || name.startsWith("redis-") ||
+                name.endsWith("-valkey") || name.endsWith("-redis") ||
+                name.matches(".*[^a-z]redis[^a-z].*") || name.matches(".*[^a-z]valkey[^a-z].*")) {
                 return "valkey";
             }
+            if (name.equals("rabbitmq") || name.equals("rabbit") ||
+                name.startsWith("rabbitmq-") || name.startsWith("rabbit-") ||
+                name.endsWith("-rabbitmq") || name.endsWith("-rabbit") ||
+                name.matches(".*[^a-z]rabbit[^a-z].*") || name.matches(".*[^a-z]rabbitmq[^a-z].*")) {
+                return "rabbitmq";
+            }
         }
         
-        return serviceKey; // Fallback to original key
+        // Check label - exact match or starts with
+        if (service.has("label")) {
+            String label = service.get("label").asText().toLowerCase();
+            if (label.equals("mysql") || label.startsWith("mysql")) return "mysql";
+            if (label.equals("postgresql") || label.equals("postgres") || 
+                label.startsWith("postgresql") || label.startsWith("postgres")) return "postgresql";
+            if (label.equals("valkey") || label.equals("redis") ||
+                label.startsWith("valkey") || label.startsWith("redis")) return "valkey";
+            if (label.equals("rabbitmq") || label.equals("rabbit") ||
+                label.startsWith("rabbitmq") || label.startsWith("rabbit")) return "rabbitmq";
+        }
+        
+        // Check service key (for standard services) - exact match or starts with
+        String keyLower = serviceKey.toLowerCase();
+        if (keyLower.equals("mysql") || keyLower.startsWith("mysql")) return "mysql";
+        if (keyLower.equals("postgresql") || keyLower.equals("postgres") ||
+            keyLower.startsWith("postgresql") || keyLower.startsWith("postgres")) return "postgresql";
+        if (keyLower.equals("valkey") || keyLower.equals("redis") ||
+            keyLower.startsWith("valkey") || keyLower.startsWith("redis")) return "valkey";
+        if (keyLower.equals("rabbitmq") || keyLower.equals("rabbit") ||
+            keyLower.startsWith("rabbitmq") || keyLower.startsWith("rabbit")) return "rabbitmq";
+        
+        // For user-provided services, check credentials structure - be more strict
+        if ("user-provided".equals(serviceKey)) {
+            // Check if it has jdbcUrl (database) - must contain jdbc: prefix
+            if (creds.getJdbcUrl() != null) {
+                String jdbcUrl = creds.getJdbcUrl().toLowerCase();
+                if (jdbcUrl.contains("jdbc:mysql://") || jdbcUrl.contains("mysql://")) return "mysql";
+                if (jdbcUrl.contains("jdbc:postgresql://") || jdbcUrl.contains("postgresql://")) return "postgresql";
+            }
+            // Only categorize as redis/valkey if service name explicitly indicates it
+            if (creds.getHost() != null && creds.getPort() != null && creds.getDatabase() == null) {
+                String serviceName = creds.getServiceName();
+                if (serviceName != null) {
+                    String nameLower = serviceName.toLowerCase();
+                    if (nameLower.contains("redis") || nameLower.contains("valkey")) {
+                        return "valkey";
+                    }
+                }
+            }
+        }
+        
+        // Don't auto-categorize - return original key to avoid false positives
+        return serviceKey;
     }
 
     private ServiceCredentials parseServiceCredentials(JsonNode service) {
