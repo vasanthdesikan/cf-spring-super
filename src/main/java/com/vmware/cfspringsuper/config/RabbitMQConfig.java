@@ -42,23 +42,49 @@ public class RabbitMQConfig {
         if (creds.getUri() != null && !creds.getUri().isEmpty()) {
             try {
                 URI uri = new URI(creds.getUri());
-                factory.setHost(uri.getHost());
-                factory.setPort(uri.getPort());
-                factory.setUsername(uri.getUserInfo().split(":")[0]);
-                factory.setPassword(uri.getUserInfo().split(":")[1]);
+                String host = uri.getHost();
+                int port = uri.getPort() != -1 ? uri.getPort() : (creds.getPort() != null ? creds.getPort() : 5672);
+                String userInfo = uri.getUserInfo();
+                
+                // If host is null from URI, fall back to individual properties
+                if (host == null || host.isEmpty()) {
+                    throw new IllegalArgumentException("Host is null or empty in URI");
+                }
+                
+                factory.setHost(host);
+                factory.setPort(port);
+                
+                if (userInfo != null && userInfo.contains(":")) {
+                    // Split only on first colon to handle passwords with colons
+                    String[] userPass = userInfo.split(":", 2);
+                    factory.setUsername(userPass[0]);
+                    factory.setPassword(userPass.length > 1 ? userPass[1] : "");
+                } else if (creds.getUsername() != null) {
+                    // Fallback to individual properties if userInfo is missing
+                    factory.setUsername(creds.getUsername());
+                    factory.setPassword(creds.getPassword() != null ? creds.getPassword() : "");
+                }
+                
                 if (creds.getVirtualHost() != null && !creds.getVirtualHost().isEmpty()) {
                     factory.setVirtualHost(creds.getVirtualHost());
-                } else if (uri.getPath() != null && !uri.getPath().isEmpty()) {
+                } else if (uri.getPath() != null && !uri.getPath().isEmpty() && uri.getPath().length() > 1) {
                     factory.setVirtualHost(uri.getPath().substring(1));
+                } else {
+                    factory.setVirtualHost("/");
                 }
+                
+                log.debug("RabbitMQ configured from URI - Host: {}, Port: {}, User: {}, VHost: {}", 
+                        host, port, factory.getUsername(), factory.getVirtualHost());
             } catch (Exception e) {
-                log.error("Error parsing RabbitMQ URI: {}", e.getMessage(), e);
+                log.error("Error parsing RabbitMQ URI: {}, falling back to individual properties", e.getMessage(), e);
                 factory.setHost(creds.getHost());
                 factory.setPort(creds.getPort() != null ? creds.getPort() : 5672);
                 factory.setUsername(creds.getUsername());
                 factory.setPassword(creds.getPassword());
-                if (creds.getVirtualHost() != null) {
+                if (creds.getVirtualHost() != null && !creds.getVirtualHost().isEmpty()) {
                     factory.setVirtualHost(creds.getVirtualHost());
+                } else {
+                    factory.setVirtualHost("/");
                 }
             }
         } else {
@@ -66,8 +92,10 @@ public class RabbitMQConfig {
             factory.setPort(creds.getPort() != null ? creds.getPort() : 5672);
             factory.setUsername(creds.getUsername());
             factory.setPassword(creds.getPassword());
-            if (creds.getVirtualHost() != null) {
+            if (creds.getVirtualHost() != null && !creds.getVirtualHost().isEmpty()) {
                 factory.setVirtualHost(creds.getVirtualHost());
+            } else {
+                factory.setVirtualHost("/");
             }
         }
 
