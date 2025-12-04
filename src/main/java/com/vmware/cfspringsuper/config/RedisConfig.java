@@ -72,12 +72,17 @@ public class RedisConfig {
                 creds.getServiceName(), isUserProvided);
 
         // Clean hostname - remove <unresolved> markers and everything after /
-        String host = cleanHostname(creds.getHost());
+        String rawHost = creds.getHost();
+        log.debug("Raw Redis host from credentials: '{}'", rawHost);
+        String host = cleanHostname(rawHost);
         if (host == null || host.isEmpty()) {
-            log.error("Redis host is null or empty after cleaning");
+            log.error("Redis host is null or empty after cleaning. Raw host was: '{}'", rawHost);
             return null;
         }
-        log.info("Using Redis host: {}", host);
+        if (!host.equals(rawHost)) {
+            log.info("Cleaned Redis hostname from '{}' to '{}'", rawHost, host);
+        }
+        log.info("Using Redis host: '{}'", host);
 
         // Determine port and whether to use TLS
         PortInfo portInfo = determinePort(creds, isUserProvided);
@@ -159,13 +164,28 @@ public class RedisConfig {
             return null;
         }
         
-        // Remove everything after / (including <unresolved>)
+        // Remove <unresolved> markers first (case-insensitive)
+        host = host.replace("<unresolved>", "");
+        host = host.replace("<UNRESOLVED>", "");
+        host = host.replace("<Unresolved>", "");
+        
+        // Remove everything after / (in case <unresolved> was after a /)
         if (host.contains("/")) {
             host = host.substring(0, host.indexOf("/"));
         }
         
-        // Remove <unresolved> marker if still present
-        host = host.replace("<unresolved>", "").trim();
+        // Remove any remaining <unresolved> markers
+        host = host.replace("<unresolved>", "");
+        host = host.replace("<UNRESOLVED>", "");
+        host = host.replace("<Unresolved>", "");
+        
+        // Trim whitespace
+        host = host.trim();
+        
+        // Remove any trailing colons or slashes
+        while (host.endsWith(":") || host.endsWith("/")) {
+            host = host.substring(0, host.length() - 1).trim();
+        }
         
         return host.isEmpty() ? null : host;
     }
@@ -185,7 +205,7 @@ public class RedisConfig {
     
     /**
      * Determine port - prefer non-TLS first, then TLS
-     * For user-provided services: try service_gateway_access_port or port (non-TLS), then TLS
+     * For user-provided services: ALWAYS use service_gateway_access_port with TLS (insecure)
      * For standard services: try port (non-TLS), then tls_port
      * Returns port and whether TLS should be enabled
      */
@@ -194,19 +214,20 @@ public class RedisConfig {
         boolean defaultUseTls = false;
         
         if (isUserProvided) {
-            // User-provided service: prefer non-TLS ports first
+            // User-provided service: ALWAYS use service_gateway_access_port with TLS (insecure)
             if (creds.getServiceGatewayAccessPort() != null) {
-                log.debug("User-provided service: using service_gateway_access_port: {} (non-TLS)", 
+                log.info("User-provided service: using service_gateway_access_port: {} with TLS (insecure)", 
                         creds.getServiceGatewayAccessPort());
-                return new PortInfo(creds.getServiceGatewayAccessPort(), false);
+                return new PortInfo(creds.getServiceGatewayAccessPort(), true);
             }
+            // Fallback to regular port with TLS if service_gateway_access_port not available
             if (creds.getPort() != null) {
-                log.debug("User-provided service: using port: {} (non-TLS)", creds.getPort());
-                return new PortInfo(creds.getPort(), false);
+                log.info("User-provided service: using port: {} with TLS (insecure)", creds.getPort());
+                return new PortInfo(creds.getPort(), true);
             }
-            // Fallback to TLS port if non-TLS not available
+            // Fallback to TLS port if available
             if (creds.getTlsPort() != null) {
-                log.debug("User-provided service: falling back to TLS port: {} (TLS required)", creds.getTlsPort());
+                log.info("User-provided service: falling back to TLS port: {} (TLS required)", creds.getTlsPort());
                 return new PortInfo(creds.getTlsPort(), true);
             }
         } else {
