@@ -72,10 +72,15 @@ public class RedisConfig {
                 creds.getServiceName(), isUserProvided);
 
         // Clean hostname - remove <unresolved> markers and everything after /
-        String host = cleanHostname(creds.getHost());
+        String rawHost = creds.getHost();
+        log.debug("Raw Redis host from credentials: {}", rawHost);
+        String host = cleanHostname(rawHost);
         if (host == null || host.isEmpty()) {
-            log.error("Redis host is null or empty after cleaning");
+            log.error("Redis host is null or empty after cleaning. Raw host was: {}", rawHost);
             return null;
+        }
+        if (!host.equals(rawHost)) {
+            log.info("Cleaned Redis hostname from '{}' to '{}'", rawHost, host);
         }
         log.info("Using Redis host: {}", host);
 
@@ -159,13 +164,28 @@ public class RedisConfig {
             return null;
         }
         
-        // Remove everything after / (including <unresolved>)
+        // First, remove <unresolved> markers (case-insensitive, handle variations)
+        host = host.replace("<unresolved>", "");
+        host = host.replace("<UNRESOLVED>", "");
+        host = host.replace("<Unresolved>", "");
+        
+        // Remove everything after / (in case <unresolved> was after a /)
         if (host.contains("/")) {
             host = host.substring(0, host.indexOf("/"));
         }
         
-        // Remove <unresolved> marker if still present
-        host = host.replace("<unresolved>", "").trim();
+        // Remove any remaining <unresolved> markers (in case they appear elsewhere)
+        host = host.replace("<unresolved>", "");
+        host = host.replace("<UNRESOLVED>", "");
+        host = host.replace("<Unresolved>", "");
+        
+        // Trim whitespace
+        host = host.trim();
+        
+        // Remove any trailing colons or other invalid characters
+        while (host.endsWith(":") || host.endsWith("/")) {
+            host = host.substring(0, host.length() - 1).trim();
+        }
         
         return host.isEmpty() ? null : host;
     }
