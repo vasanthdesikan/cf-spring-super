@@ -168,10 +168,38 @@ public class VcapServicesConfig {
                     host = hostsArray.get(0).asText();
                 }
             }
+            // Clean hostname immediately to remove <unresolved> markers
+            if (host != null) {
+                // Remove everything after / (including <unresolved>)
+                if (host.contains("/")) {
+                    host = host.substring(0, host.indexOf("/"));
+                }
+                // Remove <unresolved> marker if still present
+                host = host.replace("<unresolved>", "").trim();
+                if (host.isEmpty()) {
+                    host = null;
+                }
+            }
             creds.setHost(host);
             
             // Extract port
-            creds.setPort(extractInt(credentials, "port"));
+            Integer port = extractInt(credentials, "port");
+            // For RabbitMQ user-provided services, check protocols.amqp+ssl.port
+            if (port == null && credentials.has("protocols")) {
+                JsonNode protocols = credentials.get("protocols");
+                if (protocols.has("amqp+ssl")) {
+                    JsonNode amqpSsl = protocols.get("amqp+ssl");
+                    if (amqpSsl.has("port")) {
+                        port = amqpSsl.get("port").asInt();
+                    }
+                } else if (protocols.has("amqp")) {
+                    JsonNode amqp = protocols.get("amqp");
+                    if (amqp.has("port")) {
+                        port = amqp.get("port").asInt();
+                    }
+                }
+            }
+            creds.setPort(port);
             
             // Extract database name (try multiple field names)
             creds.setDatabase(extractString(credentials, "database", "db", "name"));

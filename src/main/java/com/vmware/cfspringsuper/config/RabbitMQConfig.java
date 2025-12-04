@@ -42,6 +42,8 @@ public class RabbitMQConfig {
         if (creds.getUri() != null && !creds.getUri().isEmpty()) {
             try {
                 URI uri = new URI(creds.getUri());
+                String scheme = uri.getScheme();
+                boolean useSsl = "amqps".equals(scheme) || "https".equals(scheme);
                 String host = uri.getHost();
                 int port = uri.getPort() != -1 ? uri.getPort() : (creds.getPort() != null ? creds.getPort() : 5672);
                 String userInfo = uri.getUserInfo();
@@ -53,6 +55,16 @@ public class RabbitMQConfig {
                 
                 factory.setHost(host);
                 factory.setPort(port);
+                
+                // Enable SSL if URI scheme is amqps://
+                if (useSsl) {
+                    try {
+                        factory.getRabbitConnectionFactory().useSslProtocol();
+                        log.debug("SSL enabled for RabbitMQ connection (amqps://)");
+                    } catch (Exception sslEx) {
+                        log.warn("Failed to enable SSL for RabbitMQ: {}", sslEx.getMessage());
+                    }
+                }
                 
                 if (userInfo != null && userInfo.contains(":")) {
                     // Split only on first colon to handle passwords with colons
@@ -73,8 +85,8 @@ public class RabbitMQConfig {
                     factory.setVirtualHost("/");
                 }
                 
-                log.debug("RabbitMQ configured from URI - Host: {}, Port: {}, User: {}, VHost: {}", 
-                        host, port, factory.getUsername(), factory.getVirtualHost());
+                log.info("RabbitMQ configured from URI - Host: {}, Port: {}, SSL: {}, User: {}, VHost: {}", 
+                        host, port, useSsl, factory.getUsername(), factory.getVirtualHost());
             } catch (Exception e) {
                 log.error("Error parsing RabbitMQ URI: {}, falling back to individual properties", e.getMessage(), e);
                 factory.setHost(creds.getHost());
