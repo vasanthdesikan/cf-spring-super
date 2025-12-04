@@ -168,35 +168,6 @@ public class VcapServicesConfig {
                     host = hostsArray.get(0).asText();
                 }
             }
-            // Clean hostname immediately to remove <unresolved> markers
-            if (host != null) {
-                // First, remove <unresolved> markers (case-insensitive, handle variations)
-                host = host.replace("<unresolved>", "");
-                host = host.replace("<UNRESOLVED>", "");
-                host = host.replace("<Unresolved>", "");
-                
-                // Remove everything after / (in case <unresolved> was after a /)
-                if (host.contains("/")) {
-                    host = host.substring(0, host.indexOf("/"));
-                }
-                
-                // Remove any remaining <unresolved> markers
-                host = host.replace("<unresolved>", "");
-                host = host.replace("<UNRESOLVED>", "");
-                host = host.replace("<Unresolved>", "");
-                
-                // Trim whitespace
-                host = host.trim();
-                
-                // Remove any trailing colons or other invalid characters
-                while (host.endsWith(":") || host.endsWith("/")) {
-                    host = host.substring(0, host.length() - 1).trim();
-                }
-                
-                if (host.isEmpty()) {
-                    host = null;
-                }
-            }
             creds.setHost(host);
             
             // Extract port
